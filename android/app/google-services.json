@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "763855863142",
+    "project_id": "jibsaja-4a970",
+    "storage_bucket": "jibsaja-4a970.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:763855863142:android:0bda86fce566e8f6bf1ca7",
+        "android_client_info": {
+          "package_name": "com.jibsaja.jibsaja"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlgGGQ3En9-F-2ZoouPnlcejE_L_aoTfE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
