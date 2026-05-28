@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -29,6 +30,7 @@ class TransactionsPage extends ConsumerWidget {
     final expenses = ref.watch(monthlyExpensesProvider);
     final net = income - expenses;
     final categoryExpenses = ref.watch(categoryExpensesProvider);
+    final dailyExpenses = ref.watch(dailyExpensesProvider);
 
     return FeatureScaffold(
       body: ListView(
@@ -93,6 +95,15 @@ class TransactionsPage extends ConsumerWidget {
           Text(DateFormat('MMMM yyyy').format(selectedMonth), style: textTheme.headlineSmall),
           const SizedBox(height: 12),
 
+          if (dailyExpenses.isNotEmpty) ...[
+            _DailySpendingChart(
+              dailyExpenses: dailyExpenses,
+              selectedMonth: selectedMonth,
+              isDark: isDark,
+            ),
+            const SizedBox(height: 24),
+          ],
+
           if (categoryExpenses.isNotEmpty) ...[
             _CategoryBreakdown(
               categoryExpenses: categoryExpenses,
@@ -107,11 +118,9 @@ class TransactionsPage extends ConsumerWidget {
           if (txsAsync.hasError)
             FirestoreErrorCard(error: txsAsync.error!, isDark: isDark)
           else if (txsAsync.isLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(40),
-                child: CircularProgressIndicator(),
-              ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: LinearProgressIndicator(),
             )
           else if (monthlyTxs.isEmpty)
             GlassCard(
@@ -360,6 +369,117 @@ class _CategoryBreakdown extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _DailySpendingChart extends StatelessWidget {
+  const _DailySpendingChart({
+    required this.dailyExpenses,
+    required this.selectedMonth,
+    required this.isDark,
+  });
+
+  final Map<int, double> dailyExpenses;
+  final DateTime selectedMonth;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final daysInMonth = DateUtils.getDaysInMonth(selectedMonth.year, selectedMonth.month);
+    final maxVal = dailyExpenses.values.fold<double>(0, (m, v) => v > m ? v : m);
+    if (maxVal == 0) return const SizedBox.shrink();
+
+    final barColor = AppColors.negative;
+    final dimColor = isDark ? AppColors.darkBorder : AppColors.surfaceContainerLow;
+
+    final groups = List.generate(daysInMonth, (i) {
+      final day = i + 1;
+      final amount = dailyExpenses[day] ?? 0;
+      return BarChartGroupData(
+        x: i,
+        barRods: [
+          BarChartRodData(
+            toY: amount,
+            color: amount > 0 ? barColor : dimColor,
+            width: 6,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+          ),
+        ],
+      );
+    });
+
+    return GlassCard(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Daily Spending', style: textTheme.titleMedium),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 110,
+            child: BarChart(
+              BarChartData(
+                maxY: maxVal * 1.2,
+                barGroups: groups,
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: maxVal * 0.5,
+                  getDrawingHorizontalLine: (_) => FlLine(
+                    color: isDark ? AppColors.darkDivider : AppColors.surfaceContainerLow,
+                    strokeWidth: 1,
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 20,
+                      interval: 4,
+                      getTitlesWidget: (value, _) {
+                        final day = value.toInt() + 1;
+                        if (day % 5 != 0 && day != 1) return const SizedBox.shrink();
+                        return Text(
+                          '$day',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isDark ? AppColors.textTertiary : AppColors.textTertiaryLight,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                barTouchData: BarTouchData(
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipColor: (_) =>
+                        isDark ? AppColors.darkCard : AppColors.surfaceCard,
+                    tooltipPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    tooltipMargin: 4,
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final day = group.x + 1;
+                      return BarTooltipItem(
+                        'Day $day\n₩${NumberFormat('#,###').format(rod.toY.toInt())}',
+                        TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? AppColors.textPrimary : AppColors.textPrimaryLight,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

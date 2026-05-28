@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/holding_repository_impl.dart';
@@ -6,11 +5,12 @@ import '../../domain/entities/holding.dart';
 import '../../domain/repositories/i_holding_repository.dart';
 import '../../domain/use_cases/compute_holdings.dart';
 import 'account_providers.dart';
+import 'firebase_providers.dart';
 import 'price_provider.dart';
 import 'transaction_providers.dart';
 
 final holdingRepositoryProvider = Provider<IHoldingRepository>((ref) {
-  return HoldingRepositoryImpl(FirebaseFirestore.instance);
+  return HoldingRepositoryImpl(ref.watch(firestoreProvider));
 });
 
 final _computeHoldingsProvider = Provider<ComputeHoldings>((ref) {

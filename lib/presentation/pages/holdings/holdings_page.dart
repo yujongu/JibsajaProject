@@ -1,7 +1,9 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../shared/theme/app_colors.dart';
+import '../../shared/utils/currency_formatter.dart';
 import '../../providers/net_worth_provider.dart';
 import '../../providers/price_provider.dart';
 import '../../shared/widgets/glass_card.dart';
@@ -13,6 +15,7 @@ import '../../providers/holding_providers.dart';
 import '../../../domain/entities/transaction_type.dart';
 import '../../providers/transaction_providers.dart';
 import '../../widgets/transactions/transaction_form_sheet.dart';
+import '../../widgets/holdings/holding_detail_sheet.dart';
 
 enum HoldingSort { alphabetical, mostInvested, mostProfited }
 
@@ -173,7 +176,7 @@ class _HoldingsPageState extends ConsumerState<HoldingsPage> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(_fmt(totalValue, 'KRW'), style: textTheme.headlineLarge),
+                      Text(CurrencyFormatter.format(totalValue, 'KRW'), style: textTheme.headlineLarge),
                     ],
                   ),
                 ),
@@ -210,6 +213,12 @@ class _HoldingsPageState extends ConsumerState<HoldingsPage> {
           ),
           const SizedBox(height: 24),
 
+          if (holdings.isNotEmpty)
+            _AllocationChart(holdings: holdings, isDark: isDark),
+
+          if (holdings.isNotEmpty)
+            const SizedBox(height: 24),
+
           Row(
             children: [
               Text('Positions', style: textTheme.headlineSmall),
@@ -224,11 +233,9 @@ class _HoldingsPageState extends ConsumerState<HoldingsPage> {
           const SizedBox(height: 12),
 
           if (isLoadingTx)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(40),
-                child: CircularProgressIndicator(),
-              ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: LinearProgressIndicator(),
             )
           else if (holdings.isEmpty)
             _EmptyHoldingsState(isDark: isDark)
@@ -252,15 +259,6 @@ class _HoldingsPageState extends ConsumerState<HoldingsPage> {
     final sign = v >= 0 ? '+' : '';
     return '$sign${NumberFormat('#,##0', 'en_US').format(v.toInt())}';
   }
-
-  static String _fmt(double v, String currency) {
-    switch (currency) {
-      case 'USD': return '\$${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'EUR': return '€${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'JPY': return '¥${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-      default:    return '₩${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-    }
-  }
 }
 
 // ── Holding Tile ──────────────────────────────────────────────────────────────
@@ -282,7 +280,9 @@ class _HoldingTile extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: GlassCard(
+      child: GestureDetector(
+        onTap: () => showHoldingDetailSheet(context, holding, hasLivePrice: hasLivePrice),
+        child: GlassCard(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
@@ -351,7 +351,7 @@ class _HoldingTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  _fmt(holding.totalValue, holding.currency),
+                  CurrencyFormatter.format(holding.totalValue, holding.currency),
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -376,7 +376,7 @@ class _HoldingTile extends StatelessWidget {
                   ],
                 ),
                 Text(
-                  _fmt(holding.currentPrice, holding.currency),
+                  CurrencyFormatter.format(holding.currentPrice, holding.currency),
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? AppColors.textTertiary : AppColors.textTertiaryLight,
@@ -386,18 +386,11 @@ class _HoldingTile extends StatelessWidget {
             ),
           ],
         ),
+        ),
       ),
     );
   }
 
-  static String _fmt(double v, String currency) {
-    switch (currency) {
-      case 'USD': return '\$${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'EUR': return '€${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'JPY': return '¥${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-      default:    return '₩${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-    }
-  }
 }
 
 // ── Sort Button ───────────────────────────────────────────────────────────────
@@ -484,6 +477,177 @@ class _SortButton extends StatelessWidget {
             )),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Allocation Pie Chart ──────────────────────────────────────────────────────
+
+class _AllocationChart extends StatefulWidget {
+  const _AllocationChart({required this.holdings, required this.isDark});
+  final List<Holding> holdings;
+  final bool isDark;
+
+  @override
+  State<_AllocationChart> createState() => _AllocationChartState();
+}
+
+class _AllocationChartState extends State<_AllocationChart> {
+  int _touched = -1;
+
+  static const _palette = [
+    Color(0xFF6C63FF),
+    Color(0xFF00C6A2),
+    Color(0xFFFF6B6B),
+    Color(0xFFFFB74D),
+    Color(0xFF4FC3F7),
+    Color(0xFFA5D6A7),
+    Color(0xFFF48FB1),
+    Color(0xFF80DEEA),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final holdings = widget.holdings;
+    final isDark = widget.isDark;
+    final textTheme = Theme.of(context).textTheme;
+
+    final total = holdings.fold<double>(0, (s, h) => s + h.totalValue);
+    if (total <= 0) return const SizedBox.shrink();
+
+    final sections = holdings.asMap().entries.map((e) {
+      final i = e.key;
+      final h = e.value;
+      final pct = h.totalValue / total;
+      final isTouched = i == _touched;
+      final color = _palette[i % _palette.length];
+      return PieChartSectionData(
+        value: h.totalValue,
+        color: color,
+        radius: isTouched ? 56 : 48,
+        title: isTouched ? '${(pct * 100).toStringAsFixed(1)}%' : '',
+        titleStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
+      );
+    }).toList();
+
+    final touchedHolding = _touched >= 0 && _touched < holdings.length
+        ? holdings[_touched]
+        : null;
+
+    return GlassCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Allocation', style: textTheme.titleMedium),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 120,
+                height: 120,
+                child: PieChart(
+                  PieChartData(
+                    sections: sections,
+                    centerSpaceRadius: 28,
+                    sectionsSpace: 2,
+                    pieTouchData: PieTouchData(
+                      touchCallback: (event, response) {
+                        setState(() {
+                          if (!event.isInterestedForInteractions ||
+                              response?.touchedSection == null) {
+                            _touched = -1;
+                          } else {
+                            _touched = response!
+                                .touchedSection!.touchedSectionIndex;
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (touchedHolding != null) ...[
+                      Text(
+                        touchedHolding.ticker,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? AppColors.textPrimary
+                              : AppColors.textPrimaryLight,
+                        ),
+                      ),
+                      Text(
+                        CurrencyFormatter.format(
+                            touchedHolding.totalValue, touchedHolding.currency),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark
+                              ? AppColors.textSecondary
+                              : AppColors.textSecondaryLight,
+                        ),
+                      ),
+                    ] else
+                      ...holdings.take(5).toList().asMap().entries.map((e) {
+                        final i = e.key;
+                        final h = e.value;
+                        final pct = h.totalValue / total * 100;
+                        final color = _palette[i % _palette.length];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 5),
+                          child: Row(children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                h.ticker,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? AppColors.textPrimary
+                                      : AppColors.textPrimaryLight,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Text(
+                              '${pct.toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark
+                                    ? AppColors.textSecondary
+                                    : AppColors.textSecondaryLight,
+                              ),
+                            ),
+                          ]),
+                        );
+                      }),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

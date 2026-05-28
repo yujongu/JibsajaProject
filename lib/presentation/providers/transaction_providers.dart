@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/sheets_sync_repository_impl.dart';
@@ -12,9 +11,10 @@ import '../../domain/use_cases/add_income_or_expense.dart';
 import '../../domain/use_cases/add_trade.dart';
 import '../../domain/use_cases/add_transfer.dart';
 import 'auth_providers.dart';
+import 'firebase_providers.dart';
 
 final transactionRepositoryProvider = Provider<ITransactionRepository>((ref) {
-  return TransactionRepositoryImpl(FirebaseFirestore.instance);
+  return TransactionRepositoryImpl(ref.watch(firestoreProvider));
 });
 
 final sheetsSyncRepositoryProvider = Provider<ISheetsSyncRepository>((ref) {
@@ -75,6 +75,15 @@ final monthlyExpensesProvider = Provider<double>((ref) {
   return txs
       .where((t) => t.type == TransactionType.expense)
       .fold(0.0, (total, t) => total + t.amount);
+});
+
+final dailyExpensesProvider = Provider<Map<int, double>>((ref) {
+  final txs = ref.watch(monthlyTransactionsProvider);
+  final result = <int, double>{};
+  for (final tx in txs.where((t) => t.type == TransactionType.expense)) {
+    result[tx.date.day] = (result[tx.date.day] ?? 0) + tx.amount;
+  }
+  return result;
 });
 
 final categoryExpensesProvider = Provider<Map<TransactionCategory, double>>((ref) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../shared/theme/app_colors.dart';
+import '../../shared/utils/currency_formatter.dart';
 import '../../providers/price_provider.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../shared/widgets/form_sheet_widgets.dart';
@@ -135,14 +136,14 @@ class AccountDetailSheet extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(_fmt(totalValue, currency),
+                    Text(CurrencyFormatter.format(totalValue, currency),
                         style: textTheme.headlineMedium),
                     const SizedBox(height: 16),
                     Row(children: [
                       Expanded(
                         child: _BalanceRow(
                           label: 'Invested',
-                          value: _fmt(investedValue, currency),
+                          value: CurrencyFormatter.format(investedValue, currency),
                           icon: Icons.show_chart_rounded,
                           color: AppColors.primary,
                           isDark: isDark,
@@ -152,7 +153,7 @@ class AccountDetailSheet extends ConsumerWidget {
                       Expanded(
                         child: _BalanceRow(
                           label: 'Cash (${cashAccount!.name})',
-                          value: _fmt(cashValue, currency),
+                          value: CurrencyFormatter.format(cashValue, currency),
                           icon: Icons.account_balance_wallet_rounded,
                           color: AppColors.positive,
                           isDark: isDark,
@@ -178,7 +179,7 @@ class AccountDetailSheet extends ConsumerWidget {
                                 : AppColors.textSecondaryLight,
                           )),
                       const SizedBox(height: 4),
-                      Text(_fmt(computedBalance, currency),
+                      Text(CurrencyFormatter.format(computedBalance, currency),
                           style: textTheme.headlineMedium),
                     ]),
                   ),
@@ -251,14 +252,6 @@ class AccountDetailSheet extends ConsumerWidget {
     );
   }
 
-  static String _fmt(double v, String currency) {
-    switch (currency) {
-      case 'USD': return '\$${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'EUR': return '€${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'JPY': return '¥${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-      default:    return '₩${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-    }
-  }
 }
 
 // ── Balance Row (inside merged card) ─────────────────────────────────────────
@@ -371,7 +364,7 @@ class _HoldingRow extends StatelessWidget {
             ]),
             Text(
               '${NumberFormat('#,##0.####', 'en_US').format(holding.quantity)} × '
-              '${_fmt(holding.currentPrice, holding.currency)}',
+              '${CurrencyFormatter.format(holding.currentPrice, holding.currency)}',
               style: TextStyle(
                   fontSize: 11,
                   color: isDark
@@ -382,7 +375,7 @@ class _HoldingRow extends StatelessWidget {
         ),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text(
-            _fmt(holding.totalValue, holding.currency),
+            CurrencyFormatter.format(holding.totalValue, holding.currency),
             style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -411,12 +404,4 @@ class _HoldingRow extends StatelessWidget {
     );
   }
 
-  static String _fmt(double v, String currency) {
-    switch (currency) {
-      case 'USD': return '\$${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'EUR': return '€${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'JPY': return '¥${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-      default:    return '₩${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-    }
-  }
 }

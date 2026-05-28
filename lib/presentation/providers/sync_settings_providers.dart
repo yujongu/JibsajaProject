@@ -1,13 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/sync_settings_repository_impl.dart';
 import '../../domain/entities/sync_settings.dart';
 import '../../domain/repositories/i_sync_settings_repository.dart';
 import 'auth_providers.dart';
+import 'firebase_providers.dart';
 
 final syncSettingsRepositoryProvider = Provider<ISyncSettingsRepository>((ref) {
-  return SyncSettingsRepositoryImpl(FirebaseFirestore.instance);
+  return SyncSettingsRepositoryImpl(ref.watch(firestoreProvider));
 });
 
 final syncSettingsStreamProvider = StreamProvider<SyncSettings>((ref) {

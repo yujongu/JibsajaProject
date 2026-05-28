@@ -1,4 +1,8 @@
 {
+  "env": {
+    "MAX_THINKING_TOKENS": "10000",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "50"
+  },
   "permissions": {
     "allow": [
       "Bash(flutter *)",
@@ -16,7 +20,9 @@
       "Bash(sed -i \"/^import '..\\\\/..\\\\/..\\\\/domain\\\\/entities\\\\/asset_type.dart';$/d; /^import '..\\\\/..\\\\/..\\\\/domain\\\\/entities\\\\/transaction_category.dart';$/d\" lib/presentation/pages/dashboard/dashboard_page.dart)",
       "Bash(sed -i \"/^import '..\\\\/..\\\\/..\\\\/domain\\\\/entities\\\\/holding_type.dart';$/d; /^import '..\\\\/..\\\\/..\\\\/domain\\\\/entities\\\\/asset_type.dart';$/d; /^import '..\\\\/..\\\\/..\\\\/domain\\\\/entities\\\\/transaction.dart';$/d; /^import '..\\\\/..\\\\/..\\\\/domain\\\\/entities\\\\/transaction_category.dart';$/d; /^import '..\\\\/..\\\\/extensions\\\\/transaction_category_ui.dart';$/d\" lib/presentation/pages/holdings/holdings_page.dart)",
       "Bash(sed -i \"/^import '..\\\\/..\\\\/..\\\\/domain\\\\/entities\\\\/asset_type.dart';$/d\" lib/presentation/pages/transactions/transactions_page.dart)",
-      "Bash(sed -i \"/^import '..\\\\/..\\\\/..\\\\/domain\\\\/entities\\\\/holding_type.dart';$/d\" lib/presentation/widgets/accounts/account_detail_sheet.dart)"
+      "Bash(sed -i \"/^import '..\\\\/..\\\\/..\\\\/domain\\\\/entities\\\\/holding_type.dart';$/d\" lib/presentation/widgets/accounts/account_detail_sheet.dart)",
+      "Bash(grep -v \"^Downloading\\\\|^Resolving\\\\|newer versions\\\\|Try \\\\`flutter\")"
     ]
-  }
+  },
+  "model": "sonnet"
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../shared/theme/app_colors.dart';
+import '../../shared/utils/currency_formatter.dart';
 import '../../shared/widgets/firestore_error_card.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../shared/widgets/glass_button.dart';
@@ -73,7 +73,7 @@ class AccountsPage extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(_fmt(totalBalance, 'KRW'),
+                  Text(CurrencyFormatter.format(totalBalance, 'KRW'),
                       style: textTheme.headlineLarge),
                 ]),
               ),
@@ -95,10 +95,9 @@ class AccountsPage extends ConsumerWidget {
           const SizedBox(height: 12),
 
           accountsAsync.when(
-            loading: () => const Center(
-                child: Padding(
-                    padding: EdgeInsets.all(40),
-                    child: CircularProgressIndicator())),
+            loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: LinearProgressIndicator()),
             error: (e, _) => FirestoreErrorCard(error: e, isDark: isDark),
             data: (accounts) {
               if (accounts.isEmpty) {
@@ -134,14 +133,6 @@ class AccountsPage extends ConsumerWidget {
     );
   }
 
-  static String _fmt(double v, String currency) {
-    switch (currency) {
-      case 'USD': return '\$${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'EUR': return '€${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'JPY': return '¥${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-      default:    return '₩${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-    }
-  }
 }
 
 // ── Merged Investment Tile ────────────────────────────────────────────────────
@@ -219,7 +210,7 @@ class _MergedInvestmentTile extends ConsumerWidget {
                 ),
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                   Text(
-                    _fmt(totalValue, currency),
+                    CurrencyFormatter.format(totalValue, currency),
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -261,7 +252,7 @@ class _MergedInvestmentTile extends ConsumerWidget {
                   Expanded(
                     child: _BreakdownCell(
                       label: 'Invested',
-                      value: _fmt(investedValue, currency),
+                      value: CurrencyFormatter.format(investedValue, currency),
                       color: AppColors.primary,
                       isDark: isDark,
                     ),
@@ -275,7 +266,7 @@ class _MergedInvestmentTile extends ConsumerWidget {
                   Expanded(
                     child: _BreakdownCell(
                       label: 'Cash',
-                      value: _fmt(cashValue, currency),
+                      value: CurrencyFormatter.format(cashValue, currency),
                       color: AppColors.positive,
                       isDark: isDark,
                     ),
@@ -289,14 +280,6 @@ class _MergedInvestmentTile extends ConsumerWidget {
     );
   }
 
-  static String _fmt(double v, String currency) {
-    switch (currency) {
-      case 'USD': return '\$${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'EUR': return '€${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'JPY': return '¥${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-      default:    return '₩${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-    }
-  }
 }
 
 class _BreakdownCell extends StatelessWidget {
@@ -402,7 +385,7 @@ class _AccountTile extends ConsumerWidget {
               ),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text(
-                  _fmt(displayBalance, account.currency),
+                  CurrencyFormatter.format(displayBalance, account.currency),
                   style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -466,14 +449,6 @@ class _AccountTile extends ConsumerWidget {
     }
   }
 
-  static String _fmt(double v, String currency) {
-    switch (currency) {
-      case 'USD': return '\$${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'EUR': return '€${NumberFormat('#,##0.00', 'en_US').format(v)}';
-      case 'JPY': return '¥${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-      default:    return '₩${NumberFormat('#,###', 'en_US').format(v.toInt())}';
-    }
-  }
 }
 
 // ── Empty State ───────────────────────────────────────────────────────────────

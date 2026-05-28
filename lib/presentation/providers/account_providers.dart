@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/account_repository_impl.dart';
@@ -8,10 +7,11 @@ import '../../domain/repositories/i_account_repository.dart';
 import '../../domain/use_cases/compute_account_balance.dart';
 import 'auth_providers.dart';
 import 'exchange_rate_provider.dart';
+import 'firebase_providers.dart';
 import 'transaction_providers.dart';
 
 final accountRepositoryProvider = Provider<IAccountRepository>((ref) {
-  return AccountRepositoryImpl(FirebaseFirestore.instance);
+  return AccountRepositoryImpl(ref.watch(firestoreProvider));
 });
 
 final accountsStreamProvider = StreamProvider<List<Account>>((ref) {

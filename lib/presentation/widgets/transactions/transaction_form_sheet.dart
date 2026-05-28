@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:uuid/uuid.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/glass_button.dart';
 import '../../shared/widgets/form_sheet_widgets.dart';
@@ -127,15 +126,6 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
     return qty * price;
   }
 
-  String _currencyForAccount(String? id) {
-    final accounts = ref.read(accountsStreamProvider).valueOrNull ?? [];
-    try {
-      return accounts.firstWhere((a) => a.id == id).currency;
-    } catch (_) {
-      return 'KRW';
-    }
-  }
-
   Account? _linkedCashAccount(String? investAccountId) {
     final accounts = ref.read(accountsStreamProvider).valueOrNull ?? [];
     try {
@@ -176,185 +166,43 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
     setState(() => _saving = true);
 
     try {
-      final repo = ref.read(transactionRepositoryProvider);
       final accounts = ref.read(accountsStreamProvider).valueOrNull ?? [];
-      final now = DateTime.now();
-      final isNew = widget.existing == null;
 
-      // ── Transfer ─────────────────────────────────────────────────────────────
       if (_txType == TransactionType.transfer) {
-        final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0;
-        Account fromAcc, toAcc;
-        try {
-          fromAcc = accounts.firstWhere((a) => a.id == _accountId);
-          toAcc   = accounts.firstWhere((a) => a.id == _toAccountId);
-        } catch (_) {
-          throw Exception('Account not found');
-        }
-
-        final debitId  = const Uuid().v4();
-        final creditId = const Uuid().v4();
-
-        await repo.batchAddTransactions(user.uid, [
-          Transaction(
-            id: debitId,
-            userId: user.uid,
-            accountId: _accountId,
-            title: 'Transfer to ${toAcc.name}',
-            amount: amount,
-            type: TransactionType.transfer,
-            isDebit: true,
-            category: TransactionCategory.other,
-            date: _date,
-            currency: fromAcc.currency,
-            createdAt: now,
-            updatedAt: now,
-          ),
-          Transaction(
-            id: creditId,
-            userId: user.uid,
-            accountId: _toAccountId,
-            title: 'Transfer from ${fromAcc.name}',
-            amount: amount,
-            type: TransactionType.transfer,
-            isDebit: false,
-            category: TransactionCategory.other,
-            date: _date,
-            currency: toAcc.currency,
-            createdAt: now,
-            updatedAt: now,
-          ),
-        ]);
-
-        ref.read(sheetsSyncRepositoryProvider).appendTransferRows(
+        await ref.read(addTransferUseCaseProvider).call(
+          uid: user.uid,
+          fromAccount: accounts.firstWhere((a) => a.id == _accountId),
+          toAccount: accounts.firstWhere((a) => a.id == _toAccountId),
+          amount: double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0,
           date: _date,
-          fromAccountName: fromAcc.name,
-          toAccountName: toAcc.name,
-          amount: amount,
-          debitTxId: debitId,
-          creditTxId: creditId,
-        ).ignore();
-
-      // ── Buy / Sell ────────────────────────────────────────────────────────────
-      } else if (_txType.isTrade) {
-        final ticker     = _tickerCtrl.text.trim().toUpperCase();
-        final assetName  = _assetNameCtrl.text.trim();
-        final quantity   = double.tryParse(_qtyCtrl.text.replaceAll(',', '')) ?? 0;
-        final unitPrice  = double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0;
-        final amount     = quantity * unitPrice;
-        final title      = '${_txType == TransactionType.buy ? 'Buy' : 'Sell'} $ticker';
-        final currency   = _currencyForAccount(_accountId);
-
-        final txId = isNew ? const Uuid().v4() : widget.existing!.id;
-        final mainTx = Transaction(
-          id: txId,
-          userId: user.uid,
-          accountId: _accountId,
-          title: title,
-          amount: amount,
-          type: _txType,
-          category: TransactionCategory.investment,
-          date: _date,
-          currency: currency,
-          ticker: ticker,
-          assetName: assetName,
-          assetType: _assetType,
-          quantity: quantity,
-          pricePerUnit: unitPrice,
-          createdAt: now,
-          updatedAt: now,
         );
-
-        final cashAccount = _linkedCashAccount(_accountId);
-        final isBuy = _txType == TransactionType.buy;
-
-        if (cashAccount != null && isNew) {
-          final transferId = const Uuid().v4();
-          final transferTx = Transaction(
-            id: transferId,
-            userId: user.uid,
-            accountId: cashAccount.id,
-            title: isBuy
-                ? 'Transfer Out (Buy $ticker)'
-                : 'Transfer In (Sell $ticker)',
-            amount: amount,
-            type: TransactionType.transfer,
-            isDebit: isBuy,
-            category: TransactionCategory.other,
-            date: _date,
-            currency: cashAccount.currency,
-            createdAt: now,
-            updatedAt: now,
-          );
-
-          await repo.batchAddTransactions(user.uid, [mainTx, transferTx]);
-
-          // Write both rows to Excel (fire and forget)
-          ref.read(sheetsSyncRepositoryProvider).appendTradeRows(
-            date: _date,
-            investAccountName: accounts.firstWhere((a) => a.id == _accountId).name,
-            cashAccountName: cashAccount.name,
-            type: _txType,
-            ticker: ticker,
-            assetName: assetName,
-            quantity: quantity,
-            price: unitPrice,
-            amount: amount,
-            tradeTxId: txId,
-            transferTxId: transferId,
-          ).ignore();
-        } else if (isNew) {
-          await repo.addTransaction(user.uid, mainTx);
-        } else {
-          await repo.updateTransaction(user.uid, widget.existing!.copyWith(
-            accountId: _accountId,
-            title: title,
-            amount: amount,
-            type: _txType,
-            category: TransactionCategory.investment,
-            date: _date,
-            currency: currency,
-            ticker: ticker,
-            assetName: assetName,
-            assetType: _assetType,
-            quantity: quantity,
-            pricePerUnit: unitPrice,
-          ));
-        }
-
-      // ── Income / Expense ──────────────────────────────────────────────────────
+      } else if (_txType.isTrade) {
+        await ref.read(addTradeUseCaseProvider).call(
+          uid: user.uid,
+          type: _txType,
+          investAccount: accounts.firstWhere((a) => a.id == _accountId),
+          ticker: _tickerCtrl.text.trim().toUpperCase(),
+          assetName: _assetNameCtrl.text.trim(),
+          assetType: _assetType,
+          quantity: double.tryParse(_qtyCtrl.text.replaceAll(',', '')) ?? 0,
+          pricePerUnit: double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0,
+          date: _date,
+          linkedCashAccount: _linkedCashAccount(_accountId),
+          existing: widget.existing,
+        );
       } else {
-        final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0;
-        final title  = _titleCtrl.text.trim();
-        final note   = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
-
-        if (isNew) {
-          await repo.addTransaction(user.uid, Transaction(
-            id: const Uuid().v4(),
-            userId: user.uid,
-            accountId: _accountId,
-            title: title,
-            amount: amount,
-            type: _txType,
-            category: _category,
-            date: _date,
-            note: note,
-            currency: _currency,
-            createdAt: now,
-            updatedAt: now,
-          ));
-        } else {
-          await repo.updateTransaction(user.uid, widget.existing!.copyWith(
-            accountId: _accountId,
-            title: title,
-            amount: amount,
-            type: _txType,
-            category: _category,
-            date: _date,
-            note: note,
-            currency: _currency,
-          ));
-        }
+        await ref.read(addIncomeOrExpenseUseCaseProvider).call(
+          uid: user.uid,
+          type: _txType,
+          title: _titleCtrl.text.trim(),
+          amount: double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0,
+          category: _category,
+          date: _date,
+          accountId: _accountId,
+          note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+          currency: _currency,
+          existing: widget.existing,
+        );
       }
 
       if (mounted) Navigator.of(context).pop();
@@ -490,7 +338,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
             FieldLabel(label: 'Asset Type', isDark: isDark),
             const SizedBox(height: 8),
             DropdownButtonFormField<AssetType>(
-              value: _assetType,
+              initialValue: _assetType,
               items: AssetType.values
                   .map((t) => DropdownMenuItem(value: t, child: Text(t.label)))
                   .toList(),
@@ -602,7 +450,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
                 fontSize: 13))
       else
         DropdownButtonFormField<String?>(
-          value: _accountId,
+          initialValue: _accountId,
           items: accounts
               .where((a) => a.type == AccountType.investment)
               .map((a) => DropdownMenuItem(value: a.id, child: Text(a.name)))
@@ -675,7 +523,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
       FieldLabel(label: 'From Account', isDark: isDark),
       const SizedBox(height: 8),
       DropdownButtonFormField<String?>(
-        value: _accountId,
+        initialValue: _accountId,
         items: [
           const DropdownMenuItem(value: null, child: Text('Select account')),
           ...accounts.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))),
@@ -692,7 +540,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
       FieldLabel(label: 'To Account', isDark: isDark),
       const SizedBox(height: 8),
       DropdownButtonFormField<String?>(
-        value: _toAccountId,
+        initialValue: _toAccountId,
         items: [
           const DropdownMenuItem(value: null, child: Text('Select account')),
           ...accounts
@@ -762,7 +610,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
             FieldLabel(label: 'Currency', isDark: isDark),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _currency,
+              initialValue: _currency,
               items: _currencies
                   .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                   .toList(),
@@ -799,7 +647,7 @@ class _TransactionFormSheetState extends ConsumerState<TransactionFormSheet> {
         FieldLabel(label: 'Account (optional)', isDark: isDark),
         const SizedBox(height: 8),
         DropdownButtonFormField<String?>(
-          value: _accountId,
+          initialValue: _accountId,
           items: [
             const DropdownMenuItem(value: null, child: Text('None')),
             ...accounts.map(

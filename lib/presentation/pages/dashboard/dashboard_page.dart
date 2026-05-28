@@ -20,17 +20,12 @@ import '../../../domain/entities/transaction_type.dart';
 import '../../extensions/transaction_category_ui.dart';
 import '../../providers/transaction_providers.dart';
 import '../../widgets/transactions/transaction_form_sheet.dart';
+import '../../shared/utils/currency_formatter.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
-
-  static String _formatKrw(double amount) {
-    final formatter = NumberFormat('#,###', 'en_US');
-    if (amount % 1 == 0) return '₩${formatter.format(amount.toInt())}';
-    return '₩${NumberFormat('#,##0.00', 'en_US').format(amount)}';
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -72,7 +67,7 @@ class DashboardPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  _formatKrw(totalBalance),
+                  CurrencyFormatter.format(totalBalance, 'KRW'),
                   style: textTheme.displayMedium?.copyWith(
                     letterSpacing: -2,
                     color: isDark
@@ -384,23 +379,6 @@ class _AccountsCarousel extends StatelessWidget {
   final bool isDark;
   final List<Account> accounts;
 
-  static String _formatBalance(double amount, String currency) {
-    final symbol = _symbol(currency);
-    final formatter = NumberFormat('#,###', 'en_US');
-    if (amount % 1 == 0) return '$symbol${formatter.format(amount.toInt())}';
-    return '$symbol${NumberFormat('#,##0.00', 'en_US').format(amount)}';
-  }
-
-  static String _symbol(String currency) {
-    switch (currency) {
-      case 'KRW': return '₩';
-      case 'USD': return '\$';
-      case 'EUR': return '€';
-      case 'JPY': return '¥';
-      default: return currency;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -431,7 +409,7 @@ class _AccountsCarousel extends StatelessWidget {
                     icon: a.type.icon,
                     label: a.name,
                     sublabel: a.type.label,
-                    value: _formatBalance(a.balance, a.currency),
+                    value: CurrencyFormatter.format(a.balance, a.currency),
                     onTap: () => showAccountFormSheet(ctx, existing: a),
                   ),
                 ),

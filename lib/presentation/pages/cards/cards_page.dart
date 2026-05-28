@@ -117,11 +117,9 @@ class _CardsPageState extends ConsumerState<CardsPage> {
           const SizedBox(height: 12),
 
           cardsAsync.when(
-            loading: () => const Center(
-              child: Padding(
-                padding: EdgeInsets.all(40),
-                child: CircularProgressIndicator(),
-              ),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: LinearProgressIndicator(),
             ),
             error: (e, _) => FirestoreErrorCard(error: e, isDark: isDark),
             data: (cards) {

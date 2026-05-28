@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../domain/entities/app_user.dart';
+import '../../domain/entities/auth_exception.dart';
 import '../../domain/repositories/i_auth_repository.dart';
 
 class AuthRepositoryImpl implements IAuthRepository {
@@ -10,25 +11,33 @@ class AuthRepositoryImpl implements IAuthRepository {
   AppUser? _map(User? u) => u == null ? null : AppUser(uid: u.uid, email: u.email);
 
   @override
-  Stream<AppUser?> authStateChanges() =>
-      _auth.authStateChanges().map(_map);
+  Stream<AppUser?> authStateChanges() => _auth.authStateChanges().map(_map);
 
   @override
   AppUser? get currentUser => _map(_auth.currentUser);
 
   @override
-  Future<void> signIn(String email, String password) =>
-      _auth.signInWithEmailAndPassword(email: email, password: password);
+  Future<void> signIn(String email, String password) async {
+    try {
+      await _auth.signInWithEmailAndPassword(email: email, password: password);
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_mapError(e.code));
+    }
+  }
 
   @override
-  Future<void> signUp(String email, String password) =>
-      _auth.createUserWithEmailAndPassword(email: email, password: password);
+  Future<void> signUp(String email, String password) async {
+    try {
+      await _auth.createUserWithEmailAndPassword(email: email, password: password);
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_mapError(e.code));
+    }
+  }
 
   @override
   Future<void> signOut() => _auth.signOut();
 
-  @override
-  String mapError(String code) {
+  String _mapError(String code) {
     switch (code) {
       case 'user-not-found':
         return 'No account found with this email.';

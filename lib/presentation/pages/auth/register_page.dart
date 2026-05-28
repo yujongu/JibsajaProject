@@ -1,7 +1,7 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../domain/entities/auth_exception.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/glass_button.dart';
 import '../../shared/widgets/glass_card.dart';
@@ -45,10 +45,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
             _emailController.text.trim(),
             _passwordController.text,
           );
-    } on FirebaseAuthException catch (e) {
+    } on AuthException catch (e) {
       setState(() {
-        _errorMessage =
-            ref.read(authRepositoryProvider).mapError(e.code);
+        _errorMessage = e.message;
       });
     } finally {
       if (mounted) setState(() => _isLoading = false);

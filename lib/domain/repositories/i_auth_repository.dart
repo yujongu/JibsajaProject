@@ -6,7 +6,4 @@ abstract class IAuthRepository {
   Future<void> signIn(String email, String password);
   Future<void> signUp(String email, String password);
   Future<void> signOut();
-
-  /// Translates a provider-specific error code to a user-friendly message.
-  String mapError(String code);
 }
