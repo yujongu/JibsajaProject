@@ -1,5 +1,3 @@
-import 'transaction_type.dart';
-
 enum TransactionCategory {
   // Expense
   food,
@@ -10,12 +8,7 @@ enum TransactionCategory {
   housing,
   education,
   utilities,
-  // Income
-  salary,
-  freelance,
   investment,
-  gift,
-  // Shared
   other,
 }
 
@@ -30,34 +23,17 @@ extension TransactionCategoryX on TransactionCategory {
       case TransactionCategory.housing:       return 'Housing';
       case TransactionCategory.education:     return 'Education';
       case TransactionCategory.utilities:     return 'Utilities';
-      case TransactionCategory.salary:        return 'Salary';
-      case TransactionCategory.freelance:     return 'Freelance';
       case TransactionCategory.investment:    return 'Investment';
-      case TransactionCategory.gift:          return 'Gift';
       case TransactionCategory.other:         return 'Other';
     }
   }
 
-  static List<TransactionCategory> forType(TransactionType type) {
-    if (type == TransactionType.income) {
-      return const [
-        TransactionCategory.salary,
-        TransactionCategory.freelance,
-        TransactionCategory.investment,
-        TransactionCategory.gift,
-        TransactionCategory.other,
-      ];
-    }
-    return const [
-      TransactionCategory.food,
-      TransactionCategory.transport,
-      TransactionCategory.shopping,
-      TransactionCategory.health,
-      TransactionCategory.entertainment,
-      TransactionCategory.housing,
-      TransactionCategory.education,
-      TransactionCategory.utilities,
-      TransactionCategory.other,
-    ];
+  /// Parse the sheet's `Category` column back into an enum.
+  static TransactionCategory fromSheet(String? raw) {
+    final v = raw?.trim().toLowerCase();
+    return TransactionCategory.values.firstWhere(
+      (c) => c.name == v,
+      orElse: () => TransactionCategory.other,
+    );
   }
 }

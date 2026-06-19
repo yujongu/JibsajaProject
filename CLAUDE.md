@@ -1,13 +1,14 @@
 # Project: Jibsaja Project
 
 ## 🎯 Project Vision & Context
-**What is this?**: A Flutter-based mobile app for asset tracking.
-**Target Audience**: People who wish to track all their liquid asset and holdings.
-**Problem it Solves**: Easily tracks assets, expenses, and holdings while syncing with excel asset dashboard.
+**What is this?**: A Flutter mobile app that is a thin client for a Google Sheet.
+It does exactly two things: **view** the transactions in the sheet, and **add rows**
+to it (Purchase / Buy / Sell). No Firebase, no live price/FX feeds.
+**Target Audience**: People who track assets/expenses in a Google Sheet dashboard.
 **Core Philosophy**: The UI should feel "Premium and Minimalist." Speed of data entry is more important than flashy animations.
 
 ## 🗺️ Project Map
-- **Firestore Schema**: [docs/data/firestore.md](docs/data/firestore.md)
+- **Sheet Schema & Backend Contract**: [docs/data/sheets.md](docs/data/sheets.md)
 - **Active Task State**: [HANDOVER.md](HANDOVER.md)
 - **Rules**: Scoped rules in `.claude/rules/`
 
@@ -19,11 +20,12 @@
 ## 📜 Development Standards (The "Harness")
 - **Architecture**: Use Clean Architecture (Data -> Domain -> Presentation).
 - **State Management**: Riverpod.
-- **Firestore**: 
-  - Never use `Map<String, dynamic>` directly in the UI. 
-  - ALWAYS use Model classes with `withConverter`.
-  - Refer to `docs/data/firestore.md` before creating new queries.
-- **Error Handling**: Use `Result` types (Success/Failure) for all Firebase calls.
+- **Google Sheets**:
+  - Never use `Map<String, dynamic>` directly in the UI.
+  - ALWAYS map JSON to/from the `SheetTransaction` entity via `SheetTransactionModel`.
+  - Refer to `docs/data/sheets.md` before changing the column layout or backend contract.
+- **Error Handling**: Use `Result` types (Success/Failure — `lib/domain/entities/result.dart`)
+  for all Google Sheets calls.
 
 ## ⌨️ Shortcuts
 - When I say `!bye`, it means: "Check for lint errors, update HANDOVER.md, and summarize next steps."
