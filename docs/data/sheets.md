@@ -3,12 +3,25 @@
 The app's only backend is a **Google Apps Script web app** bound to a Google Sheet.
 There is no Firebase. The app reads rows via `GET` and appends rows via `POST`.
 
-Configure the endpoint in `lib/core/config/app_config.dart` (gitignored):
+Configure the endpoint in `lib/core/config/app_config.dart` (gitignored — copy
+`app_config.template.dart` and fill in real values; never commit secrets):
 
 ```dart
 static const String sheetsWebAppUrl = 'https://script.google.com/.../exec';
 static const String sheetsApiKey = ''; // optional shared secret
 ```
+
+The script source is checked in at [`../apps_script/Code.gs`](../apps_script/Code.gs);
+its header documents how to deploy/redeploy. The shared secret is currently
+**enabled** (`API_KEY` in the script must equal `sheetsApiKey` in the app).
+
+> **Deploy gotchas that surface as "could not load data":** always use the
+> `/exec` URL (not `/dev` — `/dev` requires you to be logged into Google, so the
+> unauthenticated app gets a login page); set *Who has access* to **Anyone**;
+> and after editing the script you must publish a **New version**
+> (Manage deployments → Edit), or `/exec` keeps serving the old code. A missing
+> `doGet` makes Apps Script return an HTML error page with HTTP 200 — the
+> repository now detects HTML and returns a clear `Failure` instead of crashing.
 
 ## Transactions tab — column layout
 

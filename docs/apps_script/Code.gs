@@ -9,9 +9,22 @@
  *   0 Date | 1 Account | 2 Type | 3 Category | 4 Description
  *   5 Ticker | 6 Quantity | 7 Price | 8 Amount
  *
- * DEPLOY: Extensions > Apps Script, paste this, then Deploy > New deployment >
- *   Web app, "Execute as: Me", "Who has access: Anyone". Copy the /exec URL into
- *   AppConfig.sheetsWebAppUrl in lib/core/config/app_config.dart.
+ * DEPLOY: Extensions > Apps Script. Paste this as the ONLY code file (the
+ *   project must contain exactly one doGet and one doPost), then Deploy >
+ *   New deployment > Web app, "Execute as: Me", "Who has access: Anyone".
+ *   Copy the URL that ends in /exec into AppConfig.sheetsWebAppUrl in
+ *   lib/core/config/app_config.dart.
+ *
+ * REDEPLOY after editing: Deploy > Manage deployments > Edit (pencil) >
+ *   Version: "New version" > Deploy. Editing the code alone does NOT update
+ *   /exec — you must publish a new version.
+ *
+ * GOTCHAS (these cause "could not load data" in the app):
+ *   - Use the /exec URL, NOT /dev. /dev is the test endpoint and requires you
+ *     to be logged into Google, so the app (unauthenticated) gets a login page.
+ *   - "Who has access" MUST be "Anyone", or the app gets a login page.
+ *   - A missing/old doGet makes Google serve an HTML error page with HTTP 200;
+ *     the app guards against this but the real fix is redeploying a new version.
  */
 
 // ---- Config -----------------------------------------------------------------
@@ -22,7 +35,7 @@ var SHEET_NAME = 'Transactions';
 
 // Optional shared secret. Leave '' to disable the check. If set, it MUST match
 // AppConfig.sheetsApiKey in the Flutter app.
-var API_KEY = '';
+var API_KEY = 'jibsaja-secret-2024-xk9m';
 
 // Number of header rows to skip when reading (1 = a single header row).
 var HEADER_ROWS = 1;

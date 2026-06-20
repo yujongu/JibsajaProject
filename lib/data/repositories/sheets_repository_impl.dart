@@ -40,6 +40,16 @@ class SheetsRepositoryImpl implements ISheetsRepository {
         return Failure('Sheet returned ${resp.statusCode}: ${resp.body}');
       }
 
+      // Apps Script serves its own error pages (e.g. a missing doGet) as HTML
+      // with a 200 status, so guard against decoding HTML as JSON.
+      if (resp.body.trimLeft().startsWith('<')) {
+        return const Failure(
+            'Sheet endpoint returned HTML, not JSON. The Apps Script web app '
+            'is likely deployed without a doGet function or an outdated '
+            'version. Redeploy docs/apps_script/Code.gs as a new version with '
+            'access set to "Anyone".');
+      }
+
       final decoded = jsonDecode(resp.body);
       final rawRows = decoded is Map<String, dynamic>
           ? (decoded['rows'] as List? ?? const [])
@@ -84,6 +94,12 @@ class SheetsRepositoryImpl implements ISheetsRepository {
 
       if (resp.statusCode != 200) {
         return Failure('Sheet returned ${resp.statusCode}: ${resp.body}');
+      }
+      if (resp.body.trimLeft().startsWith('<')) {
+        return const Failure(
+            'Sheet endpoint returned HTML, not JSON. The Apps Script web app '
+            'is likely deployed without a doPost function or an outdated '
+            'version. Redeploy docs/apps_script/Code.gs as a new version.');
       }
       return const Success(null);
     } catch (e) {

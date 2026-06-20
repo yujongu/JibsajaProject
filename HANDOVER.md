@@ -1,8 +1,32 @@
 # HANDOVER
 
 ## Current Milestone
-**Backend is LIVE + viewer reads real data — complete.** The Google Apps Script web app is deployed
-and `AppConfig.sheetsWebAppUrl` is set (gitignored config). Verified the endpoint returns real rows.
+**"Could not load data" deployment bug — fixed & documented (2026-06-20).** The app was hitting a
+stale Apps Script deployment that ran the old Firestore-era script (no `doGet`), so GET returned an
+HTML error page and the app threw `FormatException: Unexpected character (at character 1) <!DOCTYPE`.
+Resolved end-to-end:
+- **Backend redeployed.** The correct `docs/apps_script/Code.gs` (has `doGet`+`doPost`) is now
+  published as a Web app at a fresh `/exec` URL with *Who has access: Anyone*. Verified with
+  unauthenticated curl: returns `{"rows":[...]}` with the key, `{"error":"unauthorized"}` without.
+- **App config updated.** `AppConfig.sheetsWebAppUrl` now points at the new `/exec` URL
+  (`.../AKfycbz4_GJUenGRnDfkO2cxPkbC4No9kDAcK7AhsAoZOU4wKduGcwSxCSLI8sbdgaqkU2cE8g/exec`).
+- **Shared secret enabled.** `API_KEY` in `docs/apps_script/Code.gs` and `AppConfig.sheetsApiKey`
+  both = `jibsaja-secret-2024-xk9m` (was `''`/disabled in the script).
+- **Robustness.** `SheetsRepositoryImpl.fetchTransactions` and `appendTransaction` now detect an
+  HTML body (`resp.body.trimLeft().startsWith('<')`) and return a clear `Failure` instead of letting
+  `jsonDecode` throw a cryptic `FormatException`.
+- **Cleanup.** Deleted the dead `sync/` directory (legacy Firebase two-way-sync `Code.gs` + `SETUP.md`)
+  — its `Code.gs` had `doPost` but no `doGet` and was the source of the bad deployment. `app_config.dart`
+  is confirmed gitignored (only `app_config.template.dart` is tracked; the real secret was never committed).
+- **Docs.** `docs/apps_script/Code.gs` header + `docs/data/sheets.md` now spell out the deploy gotchas
+  (`/exec` not `/dev`, *Anyone* access, must publish a **New version** on redeploy).
+
+**Restart required:** `app_config.dart` is `const`, so a full app restart (not hot reload) is needed
+to pick up the new URL.
+
+### Previous milestone — Backend LIVE + viewer reads real data
+The Google Apps Script web app is deployed and `AppConfig.sheetsWebAppUrl` is set (gitignored config).
+Verified the endpoint returns real rows.
 
 **Schema alignment fix:** the live sheet returns CAPITALIZED JSON keys (`Date`, `Account`, `Type`,
 `Category`, `Description`, `Symbol`, `Quantity`, `Price`, `Amount`) and the ticker column is named
@@ -90,12 +114,15 @@ All Firebase is removed. `flutter analyze` is clean and `flutter test` passes (5
 - **Buy/Sell row composition is a PLACEHOLDER.** `SheetTransactionModel._tradeRowsPlaceholder`
   emits a single straightforward trade row. The real logic (e.g. companion cash-transfer leg) is
   to be wired up later, per the user. `toRows()` for Purchase is the finished worked example.
-- **`app_config.dart` has empty values.** Until `sheetsWebAppUrl` is filled in, the viewer shows a
-  "not configured" message and adding a row fails gracefully.
-- **Apps Script GET endpoint must be implemented** on the user's side to return the documented JSON
-  (the previous script was write-only).
+- **Deployment is version-pinned.** Editing `docs/apps_script/Code.gs` in the Apps Script editor does
+  NOT change what `/exec` serves — you must Manage deployments → Edit → **New version**. The whole
+  "could not load data" saga was a stale deployment. If GET ever returns HTML again, redeploy first.
+- **The live `/exec` URL is a secret-ish value committed only via gitignored `app_config.dart`.** The
+  tracked `app_config.template.dart` keeps empty placeholders. Don't paste the real URL/key into
+  tracked files or docs (HANDOVER aside).
 
 ## Next Immediate Step
-Fill in `lib/core/config/app_config.dart` with the real `sheetsWebAppUrl`, then implement the
-Apps Script `doGet` to return `{rows:[...]}` as described in `docs/data/sheets.md`. After that,
-replace the Buy/Sell placeholder in `lib/data/models/sheet_transaction_model.dart`.
+Backend + viewer are fully working. Next: replace the Buy/Sell placeholder in
+`lib/data/models/sheet_transaction_model.dart` (`_tradeRowsPlaceholder`) with the real trade-row
+composition (e.g. companion cash-transfer leg) — see the 'Gravel' notes above. `toRows()` for
+Purchase is the finished worked example.
