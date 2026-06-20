@@ -26,6 +26,9 @@ migrate_working_dir/
 # Secrets (copy app_config.template.dart → app_config.dart and fill in values)
 lib/core/config/app_config.dart
 
+# Local, machine-specific Claude Code settings (shared config stays tracked)
+.claude/settings.local.json
+
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
