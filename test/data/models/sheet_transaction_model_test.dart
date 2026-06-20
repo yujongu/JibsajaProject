@@ -40,12 +40,70 @@ void main() {
       expect(tx.computedAmount, 1500);
     });
 
+    test('parses a capitalized-key buy row with Symbol (live schema)', () {
+      final tx = SheetTransactionModel.fromJson({
+        'Date': '2026-01-31T15:00:00.000Z',
+        'Account': '토스증권 국내 주식',
+        'Type': 'Buy',
+        'Category': '',
+        'Description': '',
+        'Symbol': '190510',
+        'Quantity': 1,
+        'Price': 27550,
+        'Amount': 27550,
+      });
+
+      expect(tx.type, TransactionType.buy);
+      expect(tx.account, '토스증권 국내 주식');
+      expect(tx.ticker, '190510');
+      expect(tx.quantity, 1);
+      expect(tx.price, 27550);
+      expect(tx.category, isNull);
+      expect(
+        tx.date,
+        DateTime.parse('2026-01-31T15:00:00.000Z'),
+      );
+    });
+
     test('falls back gracefully on bad/empty values', () {
       final tx = SheetTransactionModel.fromJson({'type': 'wat'});
       expect(tx.type, TransactionType.purchase);
       expect(tx.account, '');
       expect(tx.category, isNull);
       expect(tx.ticker, isNull);
+    });
+
+    test('resolves keys case-insensitively (mixed-case)', () {
+      final tx = SheetTransactionModel.fromJson({
+        'dAtE': '2026-06-02',
+        'tYpE': 'Buy',
+        'sYmBoL': 'AAPL',
+        'qUaNtItY': '10',
+        'pRiCe': '150',
+      });
+
+      expect(tx.type, TransactionType.buy);
+      expect(tx.ticker, 'AAPL');
+      expect(tx.quantity, 10);
+      expect(tx.price, 150);
+    });
+
+    test('empty Symbol falls back to legacy ticker', () {
+      final tx = SheetTransactionModel.fromJson({
+        'Symbol': '',
+        'ticker': 'AAPL',
+      });
+
+      expect(tx.ticker, 'AAPL');
+    });
+
+    test('non-empty Symbol takes precedence over co-present ticker', () {
+      final tx = SheetTransactionModel.fromJson({
+        'Symbol': 'MSFT',
+        'ticker': 'AAPL',
+      });
+
+      expect(tx.ticker, 'MSFT');
     });
   });
 
