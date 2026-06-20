@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../domain/entities/sheet_transaction.dart';
 import '../../../domain/entities/transaction_category.dart';
+import '../../../domain/entities/transaction_summary.dart';
 import '../../../domain/entities/transaction_type.dart';
 import '../../extensions/transaction_category_ui.dart';
 import '../../providers/sheets_providers.dart';
@@ -11,6 +12,10 @@ import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/error_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
 import '../../widgets/add_transaction_sheet.dart';
+
+/// Formats a bare number with grouping and up to 2 decimals. No currency
+/// symbol — the sheet stores plain numbers and there is no currency source.
+String _num(double v) => NumberFormat('#,##0.##', 'en_US').format(v);
 
 class SheetViewPage extends ConsumerWidget {
   const SheetViewPage({super.key});
@@ -54,16 +59,254 @@ class SheetViewPage extends ConsumerWidget {
             ),
             data: (txs) => txs.isEmpty
                 ? _EmptyState(isDark: isDark)
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                    itemCount: txs.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) =>
-                        _TransactionTile(tx: txs[i], isDark: isDark),
-                  ),
+                : _TransactionsList(isDark: isDark),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Summary header + month-grouped transaction sections in one scroll view.
+class _TransactionsList extends ConsumerWidget {
+  const _TransactionsList({required this.isDark});
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summary = ref.watch(transactionSummaryProvider);
+    final months = ref.watch(transactionsByMonthProvider);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+      children: [
+        _SummaryHeader(summary: summary, isDark: isDark),
+        const SizedBox(height: 20),
+        for (final group in months) ...[
+          _MonthHeader(group: group, isDark: isDark),
+          const SizedBox(height: 8),
+          for (final tx in group.transactions) ...[
+            _TransactionTile(tx: tx, isDark: isDark),
+            const SizedBox(height: 8),
+          ],
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+}
+
+/// "June 2026" style section label.
+class _MonthHeader extends StatelessWidget {
+  const _MonthHeader({required this.group, required this.isDark});
+  final MonthGroup group;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = DateFormat('MMMM yyyy').format(
+      DateTime(group.year, group.month),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, top: 4, bottom: 2),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+          color: isDark
+              ? AppColors.textSecondary
+              : AppColors.textSecondaryLight,
+        ),
+      ),
+    );
+  }
+}
+
+/// All-time overview: total spending, net invested, and a category breakdown.
+class _SummaryHeader extends StatelessWidget {
+  const _SummaryHeader({required this.summary, required this.isDark});
+  final TransactionSummary summary;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final netIsNegative = summary.netInvested < 0;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          width: 0.5,
+        ),
+        boxShadow: isDark
+            ? null
+            : const [
+                BoxShadow(
+                  color: AppColors.cardShadow,
+                  blurRadius: 20,
+                  offset: Offset(0, 4),
+                ),
+              ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _StatBlock(
+                  label: 'Total spending',
+                  value: _num(summary.totalSpending),
+                  valueColor: AppColors.negative,
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatBlock(
+                  label: 'Net invested',
+                  value: _num(summary.netInvested),
+                  valueColor:
+                      netIsNegative ? AppColors.warning : AppColors.positive,
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          ),
+          if (summary.spendingByCategory.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              'Spending by category',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isDark
+                    ? AppColors.textTertiary
+                    : AppColors.textTertiaryLight,
+              ),
+            ),
+            const SizedBox(height: 10),
+            for (final cs in summary.spendingByCategory) ...[
+              _CategoryBar(spending: cs, isDark: isDark),
+              const SizedBox(height: 10),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StatBlock extends StatelessWidget {
+  const _StatBlock({
+    required this.label,
+    required this.value,
+    required this.valueColor,
+    required this.isDark,
+  });
+
+  final String label;
+  final String value;
+  final Color valueColor;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: isDark
+                ? AppColors.textTertiary
+                : AppColors.textTertiaryLight,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w700,
+            color: valueColor,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Label + proportional bar + amount for one category's share of spending.
+class _CategoryBar extends StatelessWidget {
+  const _CategoryBar({required this.spending, required this.isDark});
+  final CategorySpending spending;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final cat = spending.category;
+    final color = cat.color;
+    final trackColor =
+        isDark ? AppColors.darkBorder : AppColors.surfaceContainerLow;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(cat.icon, size: 14, color: color),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                cat.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? AppColors.textPrimary
+                      : AppColors.textPrimaryLight,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _num(spending.amount),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isDark
+                    ? AppColors.textPrimary
+                    : AppColors.textPrimaryLight,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Stack(
+            children: [
+              Container(height: 6, color: trackColor),
+              FractionallySizedBox(
+                widthFactor: spending.fraction.clamp(0.0, 1.0),
+                child: Container(height: 6, color: color),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -182,16 +425,13 @@ class _TransactionTile extends StatelessWidget {
       ),
     );
   }
-
-  static String _num(double v) =>
-      NumberFormat('#,##0.##', 'en_US').format(v);
 }
 
 Color _typeColor(TransactionType t) {
   switch (t) {
     case TransactionType.purchase: return AppColors.negative;
     case TransactionType.buy:      return AppColors.primary;
-    case TransactionType.sell:     return const Color(0xFFF59E0B);
+    case TransactionType.sell:     return AppColors.warning;
   }
 }
 

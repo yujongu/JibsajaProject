@@ -5,23 +5,31 @@ import '../../domain/entities/transaction_type.dart';
 /// Maps a [SheetTransaction] to/from the Google Sheet.
 ///
 /// ## Sheet column layout (transactions tab)
-/// | 0 Date | 1 Account | 2 Type | 3 Category | 4 Description | 5 Ticker |
-/// | 6 Quantity | 7 Price | 8 Amount | 9 Id |
+/// | 0 Date | 1 Account | 2 Type | 3 Category | 4 Description | 5 Symbol |
+/// | 6 Quantity | 7 Price | 8 Amount |
 ///
-/// The GET endpoint of the Apps Script web app is expected to return:
-/// `{ "rows": [ { "date":..., "account":..., "type":..., "category":...,
-///   "description":..., "ticker":..., "quantity":..., "price":...,
-///   "amount":... }, ... ] }`
+/// The GET endpoint of the Apps Script web app returns objects keyed by the
+/// sheet's (capitalized) header names:
+/// `{ "rows": [ { "Date":..., "Account":..., "Type":..., "Category":...,
+///   "Description":..., "Symbol":..., "Quantity":..., "Price":...,
+///   "Amount":... }, ... ] }`
 /// (object-per-row keeps parsing resilient to column reordering).
+///
+/// Key lookup in [fromJson] is **case-insensitive**, so lowercase or
+/// capitalized keys both parse. The ticker column is read from `Symbol`
+/// (canonical) and falls back to `ticker` for compatibility.
 abstract final class SheetTransactionModel {
   /// Column order used when appending rows via the POST endpoint.
+  ///
+  /// Note: these are the POST value-array positions (position-based, not the
+  /// GET object keys). `symbol` here is the ticker column at index 5.
   static const List<String> columns = [
     'date',
     'account',
     'type',
     'category',
     'description',
-    'ticker',
+    'symbol',
     'quantity',
     'price',
     'amount',
@@ -30,19 +38,39 @@ abstract final class SheetTransactionModel {
   // ── Reading (GET) ──────────────────────────────────────────────────────────
 
   static SheetTransaction fromJson(Map<String, dynamic> json) {
+    // The live sheet returns capitalized header keys (`Date`, `Account`, …)
+    // and names the ticker column `Symbol`. Build a case-insensitive index
+    // once per row so lookups are robust to key casing.
+    final lower = _lowerKeyIndex(json);
+
+    final category = lower['category'];
     return SheetTransaction(
-      date: _parseDate(json['date']),
-      account: (json['account'] ?? '').toString(),
-      type: TransactionTypeX.fromSheet(json['type']?.toString()),
-      category: json['category'] == null || json['category'].toString().isEmpty
+      date: _parseDate(lower['date']),
+      account: (lower['account'] ?? '').toString(),
+      type: TransactionTypeX.fromSheet(lower['type']?.toString()),
+      category: category == null || category.toString().isEmpty
           ? null
-          : TransactionCategoryX.fromSheet(json['category'].toString()),
-      description: (json['description'] ?? '').toString(),
-      ticker: _emptyToNull(json['ticker']),
-      quantity: _parseNum(json['quantity']),
-      price: _parseNum(json['price']),
-      amount: _parseNum(json['amount']),
+          : TransactionCategoryX.fromSheet(category.toString()),
+      description: (lower['description'] ?? '').toString(),
+      // Canonical column is `Symbol`; fall back to `ticker` when Symbol is
+      // absent or empty.
+      ticker: _emptyToNull(lower['symbol']) ?? _emptyToNull(lower['ticker']),
+      quantity: _parseNum(lower['quantity']),
+      price: _parseNum(lower['price']),
+      amount: _parseNum(lower['amount']),
     );
+  }
+
+  /// Builds a map of the row's keys lowercased, for case-insensitive lookups.
+  ///
+  /// If two keys collide once lowercased (unexpected for the sheet headers),
+  /// the last one wins.
+  static Map<String, dynamic> _lowerKeyIndex(Map<String, dynamic> json) {
+    final out = <String, dynamic>{};
+    for (final entry in json.entries) {
+      out[entry.key.toLowerCase()] = entry.value;
+    }
+    return out;
   }
 
   // ── Writing (POST) ─────────────────────────────────────────────────────────

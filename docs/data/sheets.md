@@ -19,16 +19,16 @@ static const String sheetsApiKey = ''; // optional shared secret
 | 2   | Type        | `Purchase` \| `Buy` \| `Sell` |
 | 3   | Category    | Expense category (Purchase only), e.g. `food` |
 | 4   | Description | Short note |
-| 5   | Ticker      | Buy/Sell only |
+| 5   | Symbol      | Ticker symbol, Buy/Sell only |
 | 6   | Quantity    | Buy/Sell only |
 | 7   | Price       | Buy/Sell only |
 | 8   | Amount      | Purchase: expense amount. Buy/Sell: quantity × price |
 
-Column order is defined once in `SheetTransactionModel.columns`.
+`SheetTransactionModel.columns` documents this POST value-array order (informational). The POST builder (`toRows`) writes positions directly; the GET parser reads object keys case-insensitively and does not use `columns`.
 
 ## Row types
 - **Purchase** = a cash expense. Fields: date, account, category, description, amount.
-- **Buy / Sell** = an asset trade. Fields: date, account, ticker, quantity, price.
+- **Buy / Sell** = an asset trade. Fields: date, account, symbol, quantity, price.
   > ⚠️ Buy/Sell row composition is currently a **placeholder**
   > (`SheetTransactionModel._tradeRowsPlaceholder`). Replace it with the final
   > trade-row logic (e.g. companion cash-transfer leg) when decided.
@@ -37,17 +37,22 @@ Column order is defined once in `SheetTransactionModel.columns`.
 
 ### GET (read)
 Request: `GET {webAppUrl}?apiKey={key}`
-Response (object-per-row keeps parsing resilient to column reordering):
+Response (object-per-row keeps parsing resilient to column reordering). The live
+sheet returns **capitalized** header keys and names the ticker column `Symbol`:
 
 ```json
 {
   "rows": [
-    { "date": "2026-06-01T00:00:00.000", "account": "BoA", "type": "Purchase",
-      "category": "food", "description": "Lunch", "ticker": "", "quantity": "",
-      "price": "", "amount": 12.5 }
+    { "Date": "2026-01-31T15:00:00.000Z", "Account": "토스증권 국내 주식",
+      "Type": "Buy", "Category": "", "Description": "", "Symbol": "190510",
+      "Quantity": 1, "Price": 27550, "Amount": 27550 }
   ]
 }
 ```
+
+The parser (`SheetTransactionModel.fromJson`) resolves keys
+**case-insensitively**, so capitalized or lowercase keys both work. The ticker
+field is read from `Symbol` first and falls back to `ticker`.
 
 A bare top-level JSON array is also accepted.
 

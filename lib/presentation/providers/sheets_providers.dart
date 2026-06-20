@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/sheets_repository_impl.dart';
 import '../../domain/entities/sheet_transaction.dart';
+import '../../domain/entities/transaction_summary.dart';
 import '../../domain/repositories/i_sheets_repository.dart';
 
 /// Single data boundary for the whole app.
@@ -21,6 +22,20 @@ final transactionsProvider =
     success: (txs) => txs,
     failure: (e) => throw e,
   );
+});
+
+/// All-time aggregates (total spending, net invested, spend by category),
+/// derived from the loaded rows. Yields zero totals while loading / on error.
+final transactionSummaryProvider = Provider<TransactionSummary>((ref) {
+  final txs = ref.watch(transactionsProvider).valueOrNull ?? const [];
+  return txs.summarize();
+});
+
+/// Transactions grouped by calendar month (newest month first, newest row
+/// first within a month), for the grouped list view. Empty while loading.
+final transactionsByMonthProvider = Provider<List<MonthGroup>>((ref) {
+  final txs = ref.watch(transactionsProvider).valueOrNull ?? const [];
+  return txs.groupByMonth();
 });
 
 /// Distinct account names seen in the sheet, for the add-row dropdown.
