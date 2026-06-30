@@ -1,84 +1,63 @@
 # HANDOVER
 
 ## Current Milestone
-**"Could not load data" deployment bug — fixed & documented (2026-06-20).** The app was hitting a
-stale Apps Script deployment that ran the old Firestore-era script (no `doGet`), so GET returned an
-HTML error page and the app threw `FormatException: Unexpected character (at character 1) <!DOCTYPE`.
-Resolved end-to-end:
-- **Backend redeployed.** The correct `docs/apps_script/Code.gs` (has `doGet`+`doPost`) is now
-  published as a Web app at a fresh `/exec` URL with *Who has access: Anyone*. Verified with
-  unauthenticated curl: returns `{"rows":[...]}` with the key, `{"error":"unauthorized"}` without.
-- **App config updated.** `AppConfig.sheetsWebAppUrl` now points at the new `/exec` URL
-  (`.../AKfycbz4_GJUenGRnDfkO2cxPkbC4No9kDAcK7AhsAoZOU4wKduGcwSxCSLI8sbdgaqkU2cE8g/exec`).
-- **Shared secret enabled.** `API_KEY` in `docs/apps_script/Code.gs` and `AppConfig.sheetsApiKey`
-  both = `jibsaja-secret-2024-xk9m` (was `''`/disabled in the script).
-- **Robustness.** `SheetsRepositoryImpl.fetchTransactions` and `appendTransaction` now detect an
-  HTML body (`resp.body.trimLeft().startsWith('<')`) and return a clear `Failure` instead of letting
-  `jsonDecode` throw a cryptic `FormatException`.
-- **Cleanup.** Deleted the dead `sync/` directory (legacy Firebase two-way-sync `Code.gs` + `SETUP.md`)
-  — its `Code.gs` had `doPost` but no `doGet` and was the source of the bad deployment. `app_config.dart`
-  is confirmed gitignored (only `app_config.template.dart` is tracked; the real secret was never committed).
-- **Docs.** `docs/apps_script/Code.gs` header + `docs/data/sheets.md` now spell out the deploy gotchas
-  (`/exec` not `/dev`, *Anyone* access, must publish a **New version** on redeploy).
+**Dashboard page — scoping complete, implementation not started (2026-07-01).**
 
-**Restart required:** `app_config.dart` is `const`, so a full app restart (not hot reload) is needed
-to pick up the new URL.
+The goal is to add a second page to the app showing a summary "Dashboard" view computed from the
+Transactions data already fetched — no extra sheet call needed for the computable values.
 
-### Previous milestone — Backend LIVE + viewer reads real data
-The Google Apps Script web app is deployed and `AppConfig.sheetsWebAppUrl` is set (gitignored config).
-Verified the endpoint returns real rows.
+### What was decided this session
 
-**Schema alignment fix:** the live sheet returns CAPITALIZED JSON keys (`Date`, `Account`, `Type`,
-`Category`, `Description`, `Symbol`, `Quantity`, `Price`, `Amount`) and the ticker column is named
-**`Symbol`**, not `ticker`. `SheetTransactionModel.fromJson` now builds a lowercased key index
-(`_lowerKeyIndex`, once per row) and reads every field case-insensitively; ticker resolves as
-`_emptyToNull(lower['symbol']) ?? _emptyToNull(lower['ticker'])` (canonical `Symbol`, empty/absent
-falls through to legacy `ticker`). POST/append is unchanged (position-based). `docs/data/sheets.md`
-updated to the real schema. The Apps Script source is checked in at `docs/apps_script/Code.gs`.
-Tests: 9/9 pass (incl. mixed-case, empty-Symbol fallback, Symbol-precedence cases).
+**New Apps Script `/exec` URL:**
+`https://script.google.com/macros/s/AKfycbz2BnfyQnx9QpCIIoSxVq7P0BN3YzJFI1khOS8K5L_isymeTSYMabGH7z3tlAWL_2iIXA/exec`
+Update `AppConfig.sheetsWebAppUrl` to this URL (the old URL is now stale).
 
-### Previous milestone — Transactions viewer overview + month grouping
-Added an all-time summary header
-(Total spending, Net invested, Spending-by-category bars) above the list, and grouped the list into
-month sections ("June 2026"), newest month/row first. `flutter analyze` is clean (0 issues).
-Release APK built (`build/app/outputs/flutter-apk/app-release.apk`, ~49 MB).
+**`Code.gs` was updated** to support `?sheet=<name>` which returns the full sheet as a raw 2-D
+`grid` array. This is deployed in the new version above. The Transactions endpoint (`rows`) still
+works as before on the same URL.
 
-Built via the orchestrator pipeline (Flutter dev → clean-code review → project-lead adjudication
-→ dev applies accepted fixes). Lead-accepted fixes applied this cycle:
-1. **Symbol-less money formatting, app-wide.** Dropped the `_summaryCurrency='USD'` assumption and
-   `CurrencyFormatter` from the header; promoted `_num` (`#,##0.##`, no symbol) to a top-level fn so
-   the header and the tiles format identically. Decision: no currency source of truth exists, so do
-   NOT introduce a symbol/currency provider.
-2. **Category breakdown capped at Top 4 + "Other".** Fold logic lives in the domain layer
-   (`transaction_summary.dart`); UI loop unchanged. Keeps the header short (minimalist).
-3. **Sell color uses `AppColors.warning`** instead of a raw `0xFFF59E0B` literal.
+**The ⭐Dashboard sheet KPI cards are Scorecard Chart objects**, not cell values. `getDataRange()`
+only returns a 9-column grid with Monthly Report data, Top 10 Spendings, and Category breakdown —
+the KPI values (보유 USD 현금, 보유 KRW 현금, 보유 미국 주식, 보유 한국 주식) and asset split
+percentages are embedded chart overlays sourced from elsewhere and are NOT accessible via the grid.
 
-### Context & decisions for this change
-- **Aggregation is pure-Dart domain logic** in `lib/domain/entities/transaction_summary.dart`:
-  immutable `TransactionSummary` / `CategorySpending` / `MonthGroup`, plus a
-  `TransactionAggregates` extension on `List<SheetTransaction>` (`.summarize()`, `.groupByMonth()`).
-  No Flutter imports. Handles empty data → `TransactionSummary.empty` / `const []`.
-- **Exposed via simple derived providers** in `lib/presentation/providers/sheets_providers.dart`:
-  `transactionSummaryProvider` and `transactionsByMonthProvider`, both `Provider`s reading
-  `transactionsProvider.valueOrNull` (zero/empty while loading or on error).
-- **UI** (`sheet_view_page.dart`): the flat data `ListView` is now `_TransactionsList` — a single
-  scroll view with `_SummaryHeader` (uses `CurrencyFormatter`, glass/dark-aware styling, bars built
-  from plain Containers — no new deps) then `_MonthHeader` + existing unchanged `_TransactionTile`s.
-  Loading shimmer, error card, empty state, pull-to-refresh, and Add FAB are untouched.
-- **Money is shown symbol-less everywhere** (`#,##0.##` via the top-level `_num`). The sheet stores
-  bare numbers with no per-row currency, so no symbol is asserted. If a display currency is ever
-  wanted, add ONE app-level currency setting and thread it through both the header and the tiles.
+**Decision: compute the dashboard from the Transactions data** (already fetched by
+`transactionsProvider`) rather than making a second sheet call. The user confirmed this approach.
 
-## Previous Milestone
-**Structural pivot — complete.** The app was gutted from a full Firebase/Firestore finance
-app (auth, accounts, holdings, cards, dashboard, live price & FX feeds) down to a **Google
-Sheets thin client** with exactly two features:
-1. **View** transactions read from the sheet (`SheetViewPage`).
-2. **Add a row** of type Purchase / Buy / Sell (`AddTransactionSheet`).
+### What CAN be computed from Transactions
 
-All Firebase is removed. `flutter analyze` is clean and `flutter test` passes (5 tests).
+All account names in the transaction data are investment accounts (토스증권, 신한투자, 영웅문).
+From Buy/Sell/Purchase transactions we can derive:
+
+| Metric | How |
+|---|---|
+| Net KRW stocks invested | Sum of Buy amounts − Sell amounts for 국내 accounts |
+| Net USD stocks invested | Sum of Buy amounts − Sell amounts for 해외 accounts |
+| Total spending (KRW) | Sum of Purchase/Expense amounts |
+| Spending by category | Already implemented in `TransactionSummary` |
+| Stock vs spending asset split % | stocks / (stocks + spending) |
+
+### What CANNOT be computed from Transactions alone
+
+- 보유 USD/KRW 현금 (cash balances) — no deposit/withdrawal transactions exist in the sheet
+- 환율 / Exchange rate — external data, not in the sheet
+- Exact asset split matching the Google Sheets dashboard
+
+**Open question for next session:** Is there another sheet tab (e.g. "Holdings", "잔고", "현금")
+that stores cash balances? If yes, use `?sheet=<tabname>` to fetch it and augment the dashboard.
+If no, build the dashboard with only the computable metrics and label them clearly.
+
+### Sections the user wants on the Dashboard page
+1. KPI cards (4 values: USD cash, KRW cash, US stocks, KR stocks)
+2. Summary totals + exchange rate
+3. Asset split (stocks % vs cash %)
+
+Only items derivable from Transactions can be shown until cash balance data is located.
+
+---
 
 ## Context & Logic Decisions
+
 - **Backend = Google Apps Script web app only.** `SheetsRepositoryImpl` does `GET` (read all
   rows as JSON) and `POST` (append rows). Endpoint lives in `lib/core/config/app_config.dart`
   (gitignored; a local empty stub was created so the project compiles — fill in real values).
@@ -89,6 +68,8 @@ All Firebase is removed. `flutter analyze` is clean and `flutter test` passes (5
 - **Account names derived from the sheet.** `accountNamesProvider` collects distinct Account-column
   values for the add-row dropdown; free-text "+ New account…" is also supported.
 - **No router.** Single screen → dropped `go_router`; `main.dart` uses `MaterialApp(home:)`.
+  Adding the Dashboard page will require either a `BottomNavigationBar` or a tab bar on the home
+  screen — no router is needed, just a `StatefulWidget` with two tabs.
 - **Reused UI.** Theme (`app_colors`/`app_theme`), glass widgets, `form_sheet_widgets`,
   `gradient_scaffold` (`FeatureScaffold`), `currency_formatter`, and the category chips
   (`transaction_category` + `transaction_category_ui`, trimmed to expense categories).
@@ -98,31 +79,33 @@ All Firebase is removed. `flutter analyze` is clean and `flutter test` passes (5
   the main manifest (was debug-only).
 
 ## The 'Gravel'
+
+- **`AppConfig.sheetsWebAppUrl` must be updated** to the new `/exec` URL above. The old URL
+  (`AKfycbz4_GJUenGRnDfkO2cxPkbC4No9kDAcK7AhsAoZOU4wKduGcwSxCSLI8sbdgaqkU2cE8g/exec`) is stale.
 - **`SheetTransactionModel.columns` is informational only.** Both `toRows` (POST) and `fromJson`
   (GET) bypass it — POST writes positions directly, GET reads keys case-insensitively. It survives
-  as a length/order reference for tests. Wiring `toRows` from it was considered and REJECTED (churn
-  on the pre-existing POST path + Buy/Sell placeholder). Revisit when real trade-row logic lands.
-- **`currency_formatter.dart` is now fully unused** after the symbol-less switch (no code references;
-  only mentioned in this file). Left in place per lead decision. Delete it if it stays unused.
-- **Deferred review findings (lead chose not to fix this cycle):**
-  - `transactionSummaryProvider` / `transactionsByMonthProvider` use `.valueOrNull ?? const []`,
-    silently yielding zero/empty on loading & error. Safe only because they're read inside the
-    `data` branch of `transactionsProvider.when`. Fix the misleading doc-comment (or convert to
-    `AsyncValue`) if ever consumed outside that branch.
-  - Month-key formula `year*100+month` is duplicated in 3 spots in `transaction_summary.dart`
-    (build, `MonthGroup.sortKey`, inverse). Centralize into one helper next time the file is edited.
+  as a length/order reference for tests. Wiring `toRows` from it was considered and REJECTED.
+- **`currency_formatter.dart` is now fully unused** after the symbol-less switch. Left in place per
+  lead decision. Delete it if it stays unused.
 - **Buy/Sell row composition is a PLACEHOLDER.** `SheetTransactionModel._tradeRowsPlaceholder`
-  emits a single straightforward trade row. The real logic (e.g. companion cash-transfer leg) is
-  to be wired up later, per the user. `toRows()` for Purchase is the finished worked example.
-- **Deployment is version-pinned.** Editing `docs/apps_script/Code.gs` in the Apps Script editor does
-  NOT change what `/exec` serves — you must Manage deployments → Edit → **New version**. The whole
-  "could not load data" saga was a stale deployment. If GET ever returns HTML again, redeploy first.
-- **The live `/exec` URL is a secret-ish value committed only via gitignored `app_config.dart`.** The
-  tracked `app_config.template.dart` keeps empty placeholders. Don't paste the real URL/key into
-  tracked files or docs (HANDOVER aside).
+  emits a single straightforward trade row. The real companion cash-transfer leg logic is deferred.
+- **Deployment is version-pinned.** Editing `docs/apps_script/Code.gs` in the Apps Script editor
+  does NOT change what `/exec` serves — must Manage deployments → Edit → New version → Deploy.
+- **The live `/exec` URL is gitignored** via `app_config.dart`. Only `app_config.template.dart` is
+  tracked. Do not paste the real URL/key into tracked files.
+- **`transactionSummaryProvider` / `transactionsByMonthProvider`** use `.valueOrNull ?? const []`,
+  silently yielding zero/empty on loading & error. Safe only because consumed inside the `data`
+  branch of `transactionsProvider.when`.
 
 ## Next Immediate Step
-Backend + viewer are fully working. Next: replace the Buy/Sell placeholder in
-`lib/data/models/sheet_transaction_model.dart` (`_tradeRowsPlaceholder`) with the real trade-row
-composition (e.g. companion cash-transfer leg) — see the 'Gravel' notes above. `toRows()` for
-Purchase is the finished worked example.
+
+1. **Update `AppConfig.sheetsWebAppUrl`** in `lib/core/config/app_config.dart` to the new URL above.
+2. **Ask the user** if there is a cash balance sheet tab — this determines whether KPI cards can
+   show real cash values or only computed stock/spending values.
+3. **If no cash sheet:** build the Dashboard page with computable metrics only:
+   - Add a `BottomNavigationBar` to `main.dart` (Transactions tab + Dashboard tab)
+   - Add domain logic in `transaction_summary.dart` for stock split (KRW vs USD net invested)
+   - Build `lib/presentation/pages/dashboard/dashboard_page.dart` with KPI cards and asset split
+4. **If cash sheet exists:** add `fetchDashboard()` to `ISheetsRepository` / `SheetsRepositoryImpl`
+   using `?sheet=<tabname>`, parse the grid for the cash balance cells, and feed those into the
+   dashboard page alongside the computed stock values.

@@ -2,8 +2,9 @@
  * Jibsaja — Google Apps Script web app backing the transactions sheet.
  *
  * Implements the contract in docs/data/sheets.md:
- *   GET  {webAppUrl}?apiKey=...        -> { "rows": [ {object-per-row}, ... ] }
- *   POST {webAppUrl}  body:            { "apiKey": "...", "rows": [ [v0..v8], ... ] }
+ *   GET  {webAppUrl}?apiKey=...               -> { "rows": [ {object-per-row}, ... ] }
+ *   GET  {webAppUrl}?apiKey=...&sheet=Dashboard -> { "grid": [[row0col0, ...], ...] }
+ *   POST {webAppUrl}  body:                   { "apiKey": "...", "rows": [ [v0..v8], ... ] }
  *
  * Column order (index 0..8):
  *   0 Date | 1 Account | 2 Type | 3 Category | 4 Description
@@ -50,8 +51,13 @@ var COLUMNS = [
 
 function doGet(e) {
   try {
-    if (!authorized(e && e.parameter ? e.parameter.apiKey : null)) {
+    var params = (e && e.parameter) ? e.parameter : {};
+    if (!authorized(params.apiKey)) {
       return json({ error: 'unauthorized' });
+    }
+    // ?sheet=<name> reads the named tab as a raw 2-D grid (used for Dashboard).
+    if (params.sheet) {
+      return json({ grid: readGrid(params.sheet) });
     }
     return json({ rows: readRows() });
   } catch (err) {
@@ -95,6 +101,22 @@ function doPost(e) {
 }
 
 // ---- Helpers ----------------------------------------------------------------
+
+/**
+ * Reads every cell in [sheetName]'s used range and returns a 2-D array.
+ * Row and column indices are 0-based. Empty cells are "".
+ * Dates are serialised as ISO-8601 strings.
+ */
+function readGrid(sheetName) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error('Sheet tab "' + sheetName + '" not found.');
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  return values.map(function (row) {
+    return row.map(function (v) { return cell(v); });
+  });
+}
 
 function authorized(provided) {
   if (!API_KEY) return true; // check disabled
