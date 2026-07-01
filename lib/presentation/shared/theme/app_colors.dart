@@ -6,6 +6,7 @@ abstract final class AppColors {
   static const primaryLight = Color(0xFF006DE0); // primary-container
   static const primaryDark = Color(0xFF004491);
   static const primaryMuted = Color(0xFFACC7FF); // inverse-primary
+  static const secondaryFallback = Color(0xFF0891B2); // cyan-600, USD accent
 
   // --- Light Theme Surfaces (Material Design 3 tokens) ---
   static const background = Color(0xFFF8F9FB);

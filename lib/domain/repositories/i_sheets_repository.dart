@@ -1,3 +1,4 @@
+import '../entities/dashboard_summary.dart';
 import '../entities/result.dart';
 import '../entities/sheet_transaction.dart';
 
@@ -9,4 +10,7 @@ abstract class ISheetsRepository {
 
   /// Appends a single transaction as one or more rows to the sheet.
   Future<Result<void>> appendTransaction(SheetTransaction tx);
+
+  /// Fetches the pre-computed portfolio snapshot from the `DashboardDB1` tab.
+  Future<Result<DashboardSummary>> fetchDashboard();
 }

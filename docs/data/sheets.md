@@ -53,6 +53,11 @@ Request: `GET {webAppUrl}?apiKey={key}`
 Response (object-per-row keeps parsing resilient to column reordering). The live
 sheet returns **capitalized** header keys and names the ticker column `Symbol`:
 
+> The endpoint reports its own failures as `{"error": "..."}` with HTTP 200
+> (e.g. a wrong/missing `apiKey` returns `{"error":"unauthorized"}`). The
+> transactions parser treats a missing `rows` as empty; the dashboard parser
+> surfaces the `error` as a `Failure`.
+
 ```json
 {
   "rows": [
@@ -77,6 +82,57 @@ Request: `POST {webAppUrl}` with body:
 ```
 
 Each entry in `rows` is a value array in the column order above. Respond `200` on success.
+
+### GET a raw tab grid (`?sheet=`)
+Request: `GET {webAppUrl}?apiKey={key}&sheet={tabName}`
+Response: the tab's full used range as a raw 2-D array (`Date` cells become
+ISO-8601 strings, blanks become `""`):
+
+```json
+{ "grid": [ ["환율", 1551.425, "", ...], ["Date", "Close", "", ...], ... ] }
+```
+
+## Dashboard tab — `DashboardDB1`
+
+The Dashboard page reads **`DashboardDB1`** via `?sheet=DashboardDB1`. Every KPI
+is **pre-computed by the spreadsheet** — the app only displays it, so the numbers
+always match the sheet's own dashboard (the ⭐Dashboard tab's KPI cards are
+Scorecard chart overlays and are *not* readable via the grid; `DashboardDB1` is
+the readable mirror of those values).
+
+`DashboardSummaryModel.fromGrid` locates values by **anchoring on the Korean
+label text** (find the label cell, read the cell to its right) rather than fixed
+coordinates, so inserting rows/columns in the sheet does not break parsing.
+
+| Label (anchor) | Field | Unit | Offset from label |
+| :-- | :-- | :-- | :-- |
+| `환율` | `exchangeRate` | USD→KRW | +1 |
+| `보유 USD 현금` | `usdCash` | USD | +1 |
+| `보유 KRW 현금` | `krwCash` | KRW | +1 |
+| `보유 미국 주식` | `usStocksUsd` | USD | +1 |
+| `보유 한국 주식` | `krStocksKrw` | KRW | +1 |
+| `총 보유 현금` | `totalCashUsd` / `totalCashKrw` | USD / KRW | +1 / +2 |
+| `총 보유 주식` * | `totalStocksUsd` / `totalStocksKrw` | USD / KRW | +1 / +2 |
+| `총 자산` | `totalAssetsUsd` / `totalAssetsKrw` | USD / KRW | +1 / +2 |
+| `USD 투자 금액` | `usdInvested` | USD | +1 |
+| `KRW 투자 금액` | `krwInvested` | KRW | +1 |
+| `총 투자 금액 (in USD)` | `totalInvestedUsd` | USD | +1 |
+| `총 투자 금액 (in KRW)` | `totalInvestedKrw` | KRW | +1 |
+| `총 수익률` | `returnRate` | fraction (0.2865 = +28.65%) | +1 |
+
+\* The live cell is `"총 보유 주식 "` (trailing space) — the finder compares
+trimmed text.
+
+**FX history:** the `Date` / `Close` columns hold a daily USD/KRW series. The
+parser anchors on the `Close` header and reads down; the date is one column to
+the left. Non-numeric `Close` cells are skipped — this drops blank rows and one
+cell the sheet serialises as a bogus `1904-...` date string.
+
+> **Net-worth scope:** `총 자산` = `총 보유 현금` + `총 보유 주식` only. Crypto
+> (업비트/빗썸) and card debt live in the **`Accounts`** tab and are *not* in
+> `DashboardDB1`'s totals. To include them later, read `?sheet=Accounts`
+> (columns: `Account Name | Type | Institution | Currency | Include? | Starting
+> Balance | Current Balance | Normal Sign`) and sum `Current Balance` by `Type`.
 
 ## Account names
 The add-row form's account dropdown is **derived from the sheet** — distinct values

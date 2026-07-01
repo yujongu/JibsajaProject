@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/sheets_repository_impl.dart';
+import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/sheet_transaction.dart';
 import '../../domain/entities/transaction_summary.dart';
 import '../../domain/repositories/i_sheets_repository.dart';
@@ -20,6 +21,19 @@ final transactionsProvider =
   final result = await repo.fetchTransactions();
   return result.when(
     success: (txs) => txs,
+    failure: (e) => throw e,
+  );
+});
+
+/// Pre-computed portfolio snapshot from the `DashboardDB1` tab.
+///
+/// Throws on failure so the UI can render the error via `AsyncValue.when`.
+/// Refresh with `ref.invalidate(dashboardProvider)`.
+final dashboardProvider = FutureProvider<DashboardSummary>((ref) async {
+  final repo = ref.watch(sheetsRepositoryProvider);
+  final result = await repo.fetchDashboard();
+  return result.when(
+    success: (d) => d,
     failure: (e) => throw e,
   );
 });

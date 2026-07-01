@@ -1,111 +1,74 @@
 # HANDOVER
 
 ## Current Milestone
-**Dashboard page — scoping complete, implementation not started (2026-07-01).**
+**Dashboard page — implemented (2026-07-01).** Second tab showing a read-only
+portfolio snapshot sourced entirely from the sheet's `DashboardDB1` tab. Analyzer
+clean, 13/13 tests pass. APK build is done by the user (`flutter build apk --release`).
 
-The goal is to add a second page to the app showing a summary "Dashboard" view computed from the
-Transactions data already fetched — no extra sheet call needed for the computable values.
-
-### What was decided this session
-
-**New Apps Script `/exec` URL:**
-`https://script.google.com/macros/s/AKfycbz2BnfyQnx9QpCIIoSxVq7P0BN3YzJFI1khOS8K5L_isymeTSYMabGH7z3tlAWL_2iIXA/exec`
-Update `AppConfig.sheetsWebAppUrl` to this URL (the old URL is now stale).
-
-**`Code.gs` was updated** to support `?sheet=<name>` which returns the full sheet as a raw 2-D
-`grid` array. This is deployed in the new version above. The Transactions endpoint (`rows`) still
-works as before on the same URL.
-
-**The ⭐Dashboard sheet KPI cards are Scorecard Chart objects**, not cell values. `getDataRange()`
-only returns a 9-column grid with Monthly Report data, Top 10 Spendings, and Category breakdown —
-the KPI values (보유 USD 현금, 보유 KRW 현금, 보유 미국 주식, 보유 한국 주식) and asset split
-percentages are embedded chart overlays sourced from elsewhere and are NOT accessible via the grid.
-
-**Decision: compute the dashboard from the Transactions data** (already fetched by
-`transactionsProvider`) rather than making a second sheet call. The user confirmed this approach.
-
-### What CAN be computed from Transactions
-
-All account names in the transaction data are investment accounts (토스증권, 신한투자, 영웅문).
-From Buy/Sell/Purchase transactions we can derive:
-
-| Metric | How |
-|---|---|
-| Net KRW stocks invested | Sum of Buy amounts − Sell amounts for 국내 accounts |
-| Net USD stocks invested | Sum of Buy amounts − Sell amounts for 해외 accounts |
-| Total spending (KRW) | Sum of Purchase/Expense amounts |
-| Spending by category | Already implemented in `TransactionSummary` |
-| Stock vs spending asset split % | stocks / (stocks + spending) |
-
-### What CANNOT be computed from Transactions alone
-
-- 보유 USD/KRW 현금 (cash balances) — no deposit/withdrawal transactions exist in the sheet
-- 환율 / Exchange rate — external data, not in the sheet
-- Exact asset split matching the Google Sheets dashboard
-
-**Open question for next session:** Is there another sheet tab (e.g. "Holdings", "잔고", "현금")
-that stores cash balances? If yes, use `?sheet=<tabname>` to fetch it and augment the dashboard.
-If no, build the dashboard with only the computable metrics and label them clearly.
-
-### Sections the user wants on the Dashboard page
-1. KPI cards (4 values: USD cash, KRW cash, US stocks, KR stocks)
-2. Summary totals + exchange rate
-3. Asset split (stocks % vs cash %)
-
-Only items derivable from Transactions can be shown until cash balance data is located.
-
----
+### What shipped this session
+- **New backend wired up.** `AppConfig.sheetsWebAppUrl` updated to the new `/exec`
+  URL and `sheetsApiKey` set to `jibsaja-secret-2024-xk9m` (matches `API_KEY` in
+  `Code.gs`). The old URL was stale.
+- **`DashboardDB1` is the data source — nothing is computed client-side.** Every
+  KPI (cash/stocks/net worth/invested/return + a daily USD/KRW series) is
+  pre-authored by the spreadsheet, so the app always matches the sheet. This
+  replaced the earlier plan to derive KPIs from Transactions/Accounts (that
+  approach disagreed with the sheet — e.g. Accounts-summed US stocks ≈ $32.5k vs
+  the sheet's $40.2k).
+- **Files added:**
+  - `domain/entities/dashboard_summary.dart` — `DashboardSummary` + `FxPoint`.
+  - `data/models/dashboard_summary_model.dart` — `fromGrid`, label-anchored.
+  - `presentation/pages/dashboard/dashboard_page.dart` — the page.
+  - `presentation/pages/dashboard/fx_sparkline.dart` — CustomPaint sparkline (no
+    charting dep — fl_chart stays removed).
+  - `test/data/models/dashboard_summary_model_test.dart` — 4 tests.
+- **Files changed:** `i_sheets_repository.dart` (+`fetchDashboard()`),
+  `sheets_repository_impl.dart` (impl via `?sheet=DashboardDB1`),
+  `sheets_providers.dart` (+`dashboardProvider`), `main.dart` (2-tab `HomeShell`
+  with a custom bottom nav + `IndexedStack`), `app_colors.dart`
+  (+`secondaryFallback` cyan USD accent), `docs/data/sheets.md`.
 
 ## Context & Logic Decisions
-
-- **Backend = Google Apps Script web app only.** `SheetsRepositoryImpl` does `GET` (read all
-  rows as JSON) and `POST` (append rows). Endpoint lives in `lib/core/config/app_config.dart`
-  (gitignored; a local empty stub was created so the project compiles — fill in real values).
-  Contract documented in `docs/data/sheets.md`.
-- **Result type.** `lib/domain/entities/result.dart` (sealed Success/Failure). `fetchTransactions`
-  returns `Result`; `transactionsProvider` (a `FutureProvider`) rethrows `Failure` so the UI uses
-  `AsyncValue.when` for loading/error/data.
-- **Account names derived from the sheet.** `accountNamesProvider` collects distinct Account-column
-  values for the add-row dropdown; free-text "+ New account…" is also supported.
-- **No router.** Single screen → dropped `go_router`; `main.dart` uses `MaterialApp(home:)`.
-  Adding the Dashboard page will require either a `BottomNavigationBar` or a tab bar on the home
-  screen — no router is needed, just a `StatefulWidget` with two tabs.
-- **Reused UI.** Theme (`app_colors`/`app_theme`), glass widgets, `form_sheet_widgets`,
-  `gradient_scaffold` (`FeatureScaffold`), `currency_formatter`, and the category chips
-  (`transaction_category` + `transaction_category_ui`, trimmed to expense categories).
-- **Dependencies stripped.** Removed firebase_*, cloud_firestore, fake_cloud_firestore, fl_chart,
-  go_router, hive_flutter, and all codegen deps (no `part` files existed). Android: removed the
-  `com.google.gms.google-services` plugin + `google-services.json`; added INTERNET permission to
-  the main manifest (was debug-only).
+- **Parse by label-anchor, not fixed cells.** `DashboardSummaryModel.fromGrid`
+  finds each Korean label cell and reads the cell(s) to its right (dual-currency
+  totals: USD at +1, KRW at +2). Survives row/column inserts in the sheet.
+- **`총 자산` = cash + stocks only.** Confirmed by the sheet's own arithmetic.
+  Crypto (업비트/빗썸) and card debt are in the `Accounts` tab, NOT in
+  `DashboardDB1` totals. User accepted DashboardDB1's definition of net worth.
+  To extend later: read `?sheet=Accounts` and sum `Current Balance` by `Type`.
+- **FX rate solved.** `환율` at DashboardDB1 lives in the grid; no GOOGLEFINANCE
+  cell / fallback constant needed. The `Date`/`Close` columns give the sparkline.
+- **Dashboard surfaces endpoint errors.** Unlike `fetchTransactions` (missing
+  `rows` → empty list), `fetchDashboard` turns `{"error": ...}` into a `Failure`
+  so a bad apiKey shows in the UI instead of a blank dashboard.
+- **Nav.** `HomeShell` (StatefulWidget) + `IndexedStack` preserves each tab's
+  state. Custom bottom bar because the theme intentionally leaves `NavigationBar`
+  transparent (see `app_theme.dart` comment). Still no router.
 
 ## The 'Gravel'
-
-- **`AppConfig.sheetsWebAppUrl` must be updated** to the new `/exec` URL above. The old URL
-  (`AKfycbz4_GJUenGRnDfkO2cxPkbC4No9kDAcK7AhsAoZOU4wKduGcwSxCSLI8sbdgaqkU2cE8g/exec`) is stale.
-- **`SheetTransactionModel.columns` is informational only.** Both `toRows` (POST) and `fromJson`
-  (GET) bypass it — POST writes positions directly, GET reads keys case-insensitively. It survives
-  as a length/order reference for tests. Wiring `toRows` from it was considered and REJECTED.
-- **`currency_formatter.dart` is now fully unused** after the symbol-less switch. Left in place per
-  lead decision. Delete it if it stays unused.
-- **Buy/Sell row composition is a PLACEHOLDER.** `SheetTransactionModel._tradeRowsPlaceholder`
-  emits a single straightforward trade row. The real companion cash-transfer leg logic is deferred.
-- **Deployment is version-pinned.** Editing `docs/apps_script/Code.gs` in the Apps Script editor
-  does NOT change what `/exec` serves — must Manage deployments → Edit → New version → Deploy.
-- **The live `/exec` URL is gitignored** via `app_config.dart`. Only `app_config.template.dart` is
-  tracked. Do not paste the real URL/key into tracked files.
-- **`transactionSummaryProvider` / `transactionsByMonthProvider`** use `.valueOrNull ?? const []`,
-  silently yielding zero/empty on loading & error. Safe only because consumed inside the `data`
-  branch of `transactionsProvider.when`.
+- **APK not built by this session** — user builds it (`flutter build apk --release`,
+  output `build/app/outputs/flutter-apk/app-release.apk`). Not yet verified on the
+  physical device.
+- **Live Dashboard render unverified.** `fromGrid` is unit-tested against a slice
+  of the real grid, and the raw endpoint was fetched successfully via curl, but
+  the page has not been run on-device against live data yet.
+- **`currency_formatter.dart` still fully unused.** Dashboard uses its own local
+  `_krw`/`_usd`/`_rate` intl helpers (mirrors `sheet_view_page`'s local `_num`).
+  Delete `currency_formatter.dart` if it stays unused.
+- **One glitch cell in DashboardDB1**: a `Close` cell serialises as a bogus
+  `1904-01-03T...` date string. The FX parser skips non-numeric `Close` cells, so
+  it's handled — but it means the series can be 1 point short of the row count.
+- **Sparkline** draws straight segments (no smoothing) and has no axis labels — a
+  deliberate minimal choice. Min/max shown as text in the card header.
+- **Buy/Sell row composition is still a PLACEHOLDER** (`_tradeRowsPlaceholder`) —
+  unchanged this session, unrelated to the dashboard.
 
 ## Next Immediate Step
-
-1. **Update `AppConfig.sheetsWebAppUrl`** in `lib/core/config/app_config.dart` to the new URL above.
-2. **Ask the user** if there is a cash balance sheet tab — this determines whether KPI cards can
-   show real cash values or only computed stock/spending values.
-3. **If no cash sheet:** build the Dashboard page with computable metrics only:
-   - Add a `BottomNavigationBar` to `main.dart` (Transactions tab + Dashboard tab)
-   - Add domain logic in `transaction_summary.dart` for stock split (KRW vs USD net invested)
-   - Build `lib/presentation/pages/dashboard/dashboard_page.dart` with KPI cards and asset split
-4. **If cash sheet exists:** add `fetchDashboard()` to `ISheetsRepository` / `SheetsRepositoryImpl`
-   using `?sheet=<tabname>`, parse the grid for the cash balance cells, and feed those into the
-   dashboard page alongside the computed stock values.
+1. **Build + install the APK** and open the **Dashboard** tab against live data;
+   confirm the four KPI cards, net-worth hero, totals, investment card, and the
+   USD/KRW sparkline all render with sensible numbers.
+2. If any label doesn't resolve (shows 0), check the exact cell text in
+   `DashboardDB1` vs the anchors in `dashboard_summary_model.dart` (watch for
+   trailing spaces / full-width chars).
+3. Optional follow-ups: include crypto + card debt via the `Accounts` tab;
+   delete unused `currency_formatter.dart`.
