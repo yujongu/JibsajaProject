@@ -37,7 +37,8 @@ abstract final class SheetTransactionModel {
 
   // ── Reading (GET) ──────────────────────────────────────────────────────────
 
-  static SheetTransaction fromJson(Map<String, dynamic> json) {
+  static SheetTransaction fromJson(Map<String, dynamic> json,
+      {int rowIndex = 0}) {
     // The live sheet returns capitalized header keys (`Date`, `Account`, …)
     // and names the ticker column `Symbol`. Build a case-insensitive index
     // once per row so lookups are robust to key casing.
@@ -46,6 +47,7 @@ abstract final class SheetTransactionModel {
     final category = lower['category'];
     return SheetTransaction(
       date: _parseDate(lower['date']),
+      rowIndex: rowIndex,
       account: (lower['account'] ?? '').toString(),
       type: TransactionTypeX.fromSheet(lower['type']?.toString()),
       category: category == null || category.toString().isEmpty
@@ -77,56 +79,82 @@ abstract final class SheetTransactionModel {
 
   /// Builds the row(s) to append for [tx], matching [columns].
   ///
-  /// A Purchase produces exactly one row (implemented below as the worked
-  /// example). Buy/Sell row composition is intentionally a PLACEHOLDER — the
-  /// real logic (e.g. whether to also write a companion cash-transfer leg) is
-  /// to be wired up later. See [_tradeRowsPlaceholder].
+  /// A Purchase produces exactly one `Expense` row whose Amount is stored
+  /// **negative** (cash out) — the form passes the user's positive input and
+  /// the sign is applied here. A Buy/Sell produces **two** rows — the cash
+  /// Transfer leg plus the trade leg — see [_tradeRows].
   static List<List<dynamic>> toRows(SheetTransaction tx) {
-    if (tx.type == TransactionType.purchase) {
-      return [
-        [
-          tx.date.toIso8601String(),
-          tx.account,
-          tx.type.sheetValue,
-          tx.category?.name ?? '',
-          tx.description,
-          '', // ticker
-          '', // quantity
-          '', // price
-          tx.computedAmount,
-        ],
-      ];
-    }
-    return _tradeRowsPlaceholder(tx);
-  }
-
-  /// PLACEHOLDER for Buy/Sell row composition.
-  ///
-  /// TODO(jibsaja): replace with the real trade-row logic. For now this emits a
-  /// single straightforward trade row so the feature is end-to-end functional;
-  /// swap this out when the final sheet format / companion-row behavior is
-  /// decided.
-  static List<List<dynamic>> _tradeRowsPlaceholder(SheetTransaction tx) {
+    if (tx.type.isTrade) return _tradeRows(tx);
+    final isExpense = tx.type == TransactionType.purchase;
     return [
       [
         tx.date.toIso8601String(),
         tx.account,
         tx.type.sheetValue,
+        tx.category?.sheetValue ?? '',
+        tx.description,
+        '', // ticker
+        '', // quantity
+        '', // price
+        isExpense ? -tx.computedAmount : tx.computedAmount,
+      ],
+    ];
+  }
+
+  /// Double-entry composition for a trade: every Buy/Sell writes two rows so
+  /// each account's balance stays the sum of its signed Amounts.
+  ///
+  /// | leg | Account | Type | Quantity | Amount |
+  /// | :-- | :-- | :-- | :-- | :-- |
+  /// | cash | [SheetTransaction.account] | Transfer | blank | Buy: −(qty × price), Sell: +(qty × price) |
+  /// | trade | [SheetTransaction.secondAccount] | Buy / Sell | Buy: +qty, Sell: −qty | quantity × price |
+  ///
+  /// The sheet stores Sell quantities **negative**, so the trade leg's Amount
+  /// is always plain quantity × price; the cash leg is its negation. The
+  /// incoming [tx] carries the user's positive quantity — the sign is applied
+  /// here.
+  static List<List<dynamic>> _tradeRows(SheetTransaction tx) {
+    final date = tx.date.toIso8601String();
+    final isSell = tx.type == TransactionType.sell;
+    final signedQty =
+        tx.quantity == null ? null : (isSell ? -tx.quantity! : tx.quantity!);
+    final tradeAmount = (signedQty ?? 0) * (tx.price ?? 0);
+    return [
+      [
+        date,
+        tx.account,
+        TransactionType.transfer.sheetValue,
+        '', // category
+        tx.description,
+        '', // ticker
+        '', // quantity
+        '', // price
+        -tradeAmount,
+      ],
+      [
+        date,
+        tx.secondAccount ?? tx.account,
+        tx.type.sheetValue,
         '', // category
         tx.description,
         tx.ticker ?? '',
-        tx.quantity ?? '',
+        signedQty ?? '',
         tx.price ?? '',
-        tx.computedAmount,
+        tradeAmount,
       ],
     ];
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
+  /// Apps Script serializes date cells as UTC ISO strings (a KST `2026-02-01`
+  /// arrives as `"2026-01-31T15:00:00.000Z"`), so convert to local time —
+  /// otherwise day/month grouping and the displayed date shift back a day.
+  /// App-written dates have no `Z` and parse as local already ([DateTime.toLocal]
+  /// is a no-op for them).
   static DateTime _parseDate(dynamic v) {
     if (v == null) return DateTime.now();
-    return DateTime.tryParse(v.toString()) ?? DateTime.now();
+    return DateTime.tryParse(v.toString())?.toLocal() ?? DateTime.now();
   }
 
   static double? _parseNum(dynamic v) {

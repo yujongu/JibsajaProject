@@ -51,11 +51,13 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   final _qtyCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _newAccountCtrl = TextEditingController();
+  final _newSecondAccountCtrl = TextEditingController();
 
   TransactionType _type = TransactionType.purchase;
   TransactionCategory _category = TransactionCategory.food;
   DateTime _date = DateTime.now();
   String? _accountChoice; // an existing name, or _newAccountSentinel
+  String? _secondAccountChoice; // trades only: the brokerage account
   bool _saving = false;
 
   @override
@@ -66,6 +68,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     _qtyCtrl.dispose();
     _priceCtrl.dispose();
     _newAccountCtrl.dispose();
+    _newSecondAccountCtrl.dispose();
     super.dispose();
   }
 
@@ -75,20 +78,29 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     return qty * price;
   }
 
-  String? get _resolvedAccount {
-    if (_accountChoice == _newAccountSentinel) {
-      final v = _newAccountCtrl.text.trim();
+  String? _resolveAccount(String? choice, TextEditingController newCtrl) {
+    if (choice == _newAccountSentinel) {
+      final v = newCtrl.text.trim();
       return v.isEmpty ? null : v;
     }
-    return _accountChoice;
+    return choice;
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    final account = _resolvedAccount;
+    final account = _resolveAccount(_accountChoice, _newAccountCtrl);
     if (account == null) {
       _snack('Please choose or enter an account');
       return;
+    }
+    String? secondAccount;
+    if (_type.isTrade) {
+      secondAccount =
+          _resolveAccount(_secondAccountChoice, _newSecondAccountCtrl);
+      if (secondAccount == null) {
+        _snack('Please choose or enter a brokerage account');
+        return;
+      }
     }
 
     final tx = _type == TransactionType.purchase
@@ -105,6 +117,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             account: account,
             type: _type,
             description: _descCtrl.text.trim(),
+            secondAccount: secondAccount,
             ticker: _tickerCtrl.text.trim().toUpperCase(),
             quantity: double.tryParse(_qtyCtrl.text.replaceAll(',', '')) ?? 0,
             price: double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0,
@@ -118,6 +131,11 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     switch (result) {
       case Success():
         ref.invalidate(transactionsProvider);
+        // The root ScaffoldMessenger outlives this bottom sheet, so the toast
+        // stays visible after the pop.
+        _snack(_type.isTrade
+            ? 'Sheet updated — ${_type.label} added (2 rows)'
+            : 'Sheet updated — ${_type.label} added');
         Navigator.of(context).pop(true);
       case Failure(:final error):
         _snack('Could not add row: $error');
@@ -179,9 +197,45 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
                 ..._tradeFields(isDark),
 
               const SizedBox(height: 16),
-              FieldLabel(label: 'Account', isDark: isDark),
+              FieldLabel(
+                label: _type.isTrade ? 'Brokerage cash account' : 'Account',
+                isDark: isDark,
+              ),
               const SizedBox(height: 8),
-              _accountSelector(isDark, accounts),
+              _accountSelector(
+                isDark,
+                accounts,
+                choice: _accountChoice,
+                newCtrl: _newAccountCtrl,
+                onChanged: (v) => setState(() => _accountChoice = v),
+              ),
+
+              if (_type.isTrade) ...[
+                const SizedBox(height: 16),
+                FieldLabel(label: 'Brokerage account', isDark: isDark),
+                const SizedBox(height: 8),
+                _accountSelector(
+                  isDark,
+                  accounts,
+                  choice: _secondAccountChoice,
+                  newCtrl: _newSecondAccountCtrl,
+                  onChanged: (v) => setState(() => _secondAccountChoice = v),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _type == TransactionType.buy
+                      ? 'Writes 2 rows: Transfer (−total) from the cash '
+                          'account, Buy (+total) in the brokerage account.'
+                      : 'Writes 2 rows: Transfer (+total) into the cash '
+                          'account, Sell (−total) in the brokerage account.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark
+                        ? AppColors.textTertiary
+                        : AppColors.textTertiaryLight,
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 16),
               FieldLabel(label: 'Date', isDark: isDark),
@@ -315,12 +369,18 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
 
   // ── Account selector ─────────────────────────────────────────────────────
 
-  Widget _accountSelector(bool isDark, List<String> accounts) {
+  Widget _accountSelector(
+    bool isDark,
+    List<String> accounts, {
+    required String? choice,
+    required TextEditingController newCtrl,
+    required ValueChanged<String?> onChanged,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DropdownButtonFormField<String?>(
-          initialValue: _accountChoice,
+          initialValue: choice,
           isExpanded: true,
           items: [
             ...accounts.map(
@@ -328,7 +388,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             const DropdownMenuItem(
                 value: _newAccountSentinel, child: Text('+ New account…')),
           ],
-          onChanged: (v) => setState(() => _accountChoice = v),
+          onChanged: onChanged,
           decoration: sheetInputDeco(
               isDark: isDark,
               hint: accounts.isEmpty ? 'Add a new account' : 'Select account'),
@@ -336,10 +396,10 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
           style: _inputStyle(isDark),
           validator: (v) => v == null ? 'Required' : null,
         ),
-        if (_accountChoice == _newAccountSentinel) ...[
+        if (choice == _newAccountSentinel) ...[
           const SizedBox(height: 10),
           SheetTextField(
-            ctrl: _newAccountCtrl,
+            ctrl: newCtrl,
             hint: 'New account name',
             isDark: isDark,
             textCapitalization: TextCapitalization.words,
@@ -397,6 +457,7 @@ Color _typeColor(TransactionType t) {
     case TransactionType.purchase: return AppColors.negative;
     case TransactionType.buy:      return AppColors.primary;
     case TransactionType.sell:     return const Color(0xFFF59E0B);
+    case TransactionType.transfer: return AppColors.secondaryFallback;
   }
 }
 
@@ -412,7 +473,7 @@ class _TypeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: TransactionType.values.map((t) {
+        children: TransactionType.userSelectable.map((t) {
           final isSelected = t == selected;
           final color = _typeColor(t);
           return Expanded(

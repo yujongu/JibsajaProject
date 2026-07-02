@@ -38,11 +38,13 @@ final dashboardProvider = FutureProvider<DashboardSummary>((ref) async {
   );
 });
 
-/// All-time aggregates (total spending, net invested, spend by category),
-/// derived from the loaded rows. Yields zero totals while loading / on error.
-final transactionSummaryProvider = Provider<TransactionSummary>((ref) {
+/// Current-month aggregates (spending, net invested, spend by category) for
+/// the summary header, derived from the loaded rows. Yields zero totals while
+/// loading / on error.
+final currentMonthSummaryProvider = Provider<TransactionSummary>((ref) {
   final txs = ref.watch(transactionsProvider).valueOrNull ?? const [];
-  return txs.summarize();
+  final now = DateTime.now();
+  return txs.inMonth(now.year, now.month).summarize();
 });
 
 /// Transactions grouped by calendar month (newest month first, newest row

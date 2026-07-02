@@ -83,12 +83,15 @@ class SheetsRepositoryImpl implements ISheetsRepository {
           ? (decoded['rows'] as List? ?? const [])
           : (decoded as List? ?? const []);
 
-      final txs = rawRows
-          .whereType<Map>()
-          .map((r) => SheetTransactionModel.fromJson(
-              r.map((k, v) => MapEntry(k.toString(), v))))
-          .toList()
-        ..sort((a, b) => b.date.compareTo(a.date)); // newest first
+      // The list index is the row's sheet position — kept as the sort
+      // tiebreaker so same-timestamp rows stay in a deterministic order.
+      final txs = [
+        for (var i = 0; i < rawRows.length; i++)
+          if (rawRows[i] case final Map r)
+            SheetTransactionModel.fromJson(
+                r.map((k, v) => MapEntry(k.toString(), v)),
+                rowIndex: i),
+      ]..sort(SheetTransaction.newestFirst);
 
       return Success(txs);
     } catch (e) {
@@ -135,7 +138,17 @@ class SheetsRepositoryImpl implements ISheetsRepository {
         return Failure('Sheet error: $error');
       }
 
-      final rawGrid = decoded['grid'] as List? ?? const [];
+      // A deployed Apps Script that predates ?sheet= support ignores the param
+      // and answers with the transactions {"rows": ...} payload instead — every
+      // KPI would silently parse as 0, so fail loudly with the redeploy hint.
+      final rawGrid = decoded['grid'];
+      if (rawGrid is! List) {
+        return const Failure(
+            'Dashboard response has no "grid" — the deployed Apps Script is an '
+            'old version without ?sheet= support. Redeploy '
+            'docs/apps_script/Code.gs as a new version (Deploy → Manage '
+            'deployments → Edit → New version).');
+      }
       final grid = rawGrid
           .map<List<dynamic>>((row) => row is List ? row : const [])
           .toList();

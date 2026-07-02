@@ -74,7 +74,7 @@ class _TransactionsList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final summary = ref.watch(transactionSummaryProvider);
+    final summary = ref.watch(currentMonthSummaryProvider);
     final months = ref.watch(transactionsByMonthProvider);
 
     return ListView(
@@ -124,7 +124,7 @@ class _MonthHeader extends StatelessWidget {
   }
 }
 
-/// All-time overview: total spending, net invested, and a category breakdown.
+/// Current-month overview: spending, net invested, and a category breakdown.
 class _SummaryHeader extends StatelessWidget {
   const _SummaryHeader({required this.summary, required this.isDark});
   final TransactionSummary summary;
@@ -133,6 +133,7 @@ class _SummaryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final netIsNegative = summary.netInvested < 0;
+    final monthLabel = DateFormat('MMMM yyyy').format(DateTime.now());
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -158,9 +159,35 @@ class _SummaryHeader extends StatelessWidget {
         children: [
           Row(
             children: [
+              Text(
+                'This month',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? AppColors.textSecondary
+                      : AppColors.textSecondaryLight,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                monthLabel,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: isDark
+                      ? AppColors.textTertiary
+                      : AppColors.textTertiaryLight,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
               Expanded(
                 child: _StatBlock(
-                  label: 'Total spending',
+                  label: 'Spending',
                   value: _num(summary.totalSpending),
                   valueColor: AppColors.negative,
                   isDark: isDark,
@@ -322,11 +349,15 @@ class _TransactionTile extends StatelessWidget {
     final isPurchase = tx.type == TransactionType.purchase;
     final cat = tx.category;
 
-    final title = isPurchase
-        ? (tx.description.isNotEmpty
-            ? tx.description
-            : (cat?.label ?? 'Purchase'))
-        : (tx.ticker ?? tx.type.label);
+    final title = switch (tx.type) {
+      TransactionType.purchase => tx.description.isNotEmpty
+          ? tx.description
+          : (cat?.label ?? 'Purchase'),
+      // Transfer rows carry no ticker; show their note (the trade description).
+      TransactionType.transfer =>
+        tx.description.isNotEmpty ? tx.description : 'Transfer',
+      _ => tx.ticker ?? tx.type.label,
+    };
 
     final subtitleParts = <String>[
       tx.account,
@@ -355,11 +386,13 @@ class _TransactionTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
-              isPurchase
-                  ? (cat?.icon ?? Icons.shopping_bag_rounded)
-                  : (tx.type == TransactionType.buy
-                      ? Icons.trending_up_rounded
-                      : Icons.trending_down_rounded),
+              switch (tx.type) {
+                TransactionType.purchase =>
+                  cat?.icon ?? Icons.shopping_bag_rounded,
+                TransactionType.buy => Icons.trending_up_rounded,
+                TransactionType.sell => Icons.trending_down_rounded,
+                TransactionType.transfer => Icons.swap_horiz_rounded,
+              },
               size: 20,
               color: color,
             ),
@@ -432,6 +465,7 @@ Color _typeColor(TransactionType t) {
     case TransactionType.purchase: return AppColors.negative;
     case TransactionType.buy:      return AppColors.primary;
     case TransactionType.sell:     return AppColors.warning;
+    case TransactionType.transfer: return AppColors.secondaryFallback;
   }
 }
 

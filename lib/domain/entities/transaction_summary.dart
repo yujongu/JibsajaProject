@@ -13,10 +13,12 @@ class TransactionSummary {
     required this.spendingByCategory,
   });
 
-  /// Sum of `computedAmount` for every Purchase row.
+  /// Total Purchase spend as a **positive magnitude**. Expense rows store
+  /// negative Amounts (cash out), so this is −Σ of their amounts.
   final double totalSpending;
 
-  /// (Σ Buy computedAmount) − (Σ Sell computedAmount).
+  /// Σ signed trade amounts. Buy rows are positive, Sell rows negative
+  /// (the sheet's sign convention), so this is buys minus sell proceeds.
   final double netInvested;
 
   /// Purchase spend grouped by category, sorted descending by amount.
@@ -70,26 +72,32 @@ class MonthGroup {
 
 /// Pure aggregation helpers over a list of transactions. Domain logic.
 extension TransactionAggregates on List<SheetTransaction> {
+  /// Rows dated within the given calendar [month] (1–12) of [year].
+  List<SheetTransaction> inMonth(int year, int month) =>
+      where((tx) => tx.date.year == year && tx.date.month == month).toList();
+
   /// Compute the all-time summary. Empty list yields [TransactionSummary.empty].
   TransactionSummary summarize() {
     if (isEmpty) return TransactionSummary.empty;
 
     var totalSpending = 0.0;
-    var buyTotal = 0.0;
-    var sellTotal = 0.0;
+    var netInvested = 0.0;
     final byCategory = <TransactionCategory, double>{};
 
     for (final tx in this) {
       final amount = tx.computedAmount;
       switch (tx.type) {
         case TransactionType.purchase:
-          totalSpending += amount;
-          final cat = tx.category ?? TransactionCategory.other;
-          byCategory[cat] = (byCategory[cat] ?? 0) + amount;
+          // Expense amounts are stored negative; report spending positive.
+          final spend = -amount;
+          totalSpending += spend;
+          final cat = tx.category ?? TransactionCategory.misc;
+          byCategory[cat] = (byCategory[cat] ?? 0) + spend;
         case TransactionType.buy:
-          buyTotal += amount;
         case TransactionType.sell:
-          sellTotal += amount;
+          netInvested += amount; // signed: Buy +, Sell −
+        case TransactionType.transfer:
+          break; // cash leg of a trade — neither spending nor investing
       }
     }
 
@@ -108,14 +116,14 @@ extension TransactionAggregates on List<SheetTransaction> {
 
     return TransactionSummary(
       totalSpending: totalSpending,
-      netInvested: buyTotal - sellTotal,
+      netInvested: netInvested,
       spendingByCategory: cappedByCategory,
     );
   }
 
   /// Cap the breakdown at the top 4 categories plus a single trailing "Other"
   /// that folds in the remaining tail. With 5 or fewer categories, returns the
-  /// list unchanged. If [TransactionCategory.other] is already in the top 4,
+  /// list unchanged. If [TransactionCategory.misc] is already in the top 4,
   /// the folded tail is merged into it rather than producing a second "Other".
   /// [sorted] must already be sorted descending by amount.
   static List<CategorySpending> _capCategories(
@@ -135,12 +143,12 @@ extension TransactionAggregates on List<SheetTransaction> {
     }
 
     final existingOtherIndex =
-        top.indexWhere((cs) => cs.category == TransactionCategory.other);
+        top.indexWhere((cs) => cs.category == TransactionCategory.misc);
 
     if (existingOtherIndex != -1) {
       final existing = top[existingOtherIndex];
       top[existingOtherIndex] = CategorySpending(
-        category: TransactionCategory.other,
+        category: TransactionCategory.misc,
         amount: existing.amount + tailAmount,
         fraction: existing.fraction + tailFraction,
       );
@@ -150,7 +158,7 @@ extension TransactionAggregates on List<SheetTransaction> {
     return [
       ...top,
       CategorySpending(
-        category: TransactionCategory.other,
+        category: TransactionCategory.misc,
         amount: tailAmount,
         fraction: totalSpending == 0 ? 0 : tailAmount / totalSpending,
       ),
@@ -169,7 +177,7 @@ extension TransactionAggregates on List<SheetTransaction> {
     }
 
     final groups = buckets.entries.map((e) {
-      final txs = [...e.value]..sort((a, b) => b.date.compareTo(a.date));
+      final txs = [...e.value]..sort(SheetTransaction.newestFirst);
       return MonthGroup(
         year: e.key ~/ 100,
         month: e.key % 100,

@@ -29,22 +29,36 @@ its header documents how to deploy/redeploy. The shared secret is currently
 | :-- | :---------- | :---- |
 | 0   | Date        | ISO-8601 string |
 | 1   | Account     | Free text (e.g. "Robinhood", "BoA") |
-| 2   | Type        | `Purchase` \| `Buy` \| `Sell` |
-| 3   | Category    | Expense category (Purchase only), e.g. `food` |
+| 2   | Type        | `Expense` \| `Buy` \| `Sell` \| `Transfer` (the app labels the Expense flow "Purchase") |
+| 3   | Category    | Expense rows only. One of: `Monthly`, `교통`, `식비`, `생필품`, `의류`, `Fun`, `배달음식`, `Misc.`, `Work`, `경조사`, `웨딩`, `여행` |
 | 4   | Description | Short note |
 | 5   | Symbol      | Ticker symbol, Buy/Sell only |
-| 6   | Quantity    | Buy/Sell only |
-| 7   | Price       | Buy/Sell only |
-| 8   | Amount      | Purchase: expense amount. Buy/Sell: quantity × price |
+| 6   | Quantity    | Buy/Sell only. **Signed** — Sell rows store a negative quantity |
+| 7   | Price       | Buy/Sell only, always positive |
+| 8   | Amount      | **Signed.** Expense: **−amount** (cash out). Buy/Sell: quantity × price (Sell negative via its quantity). Transfer: − = cash out, + = cash in |
 
 `SheetTransactionModel.columns` documents this POST value-array order (informational). The POST builder (`toRows`) writes positions directly; the GET parser reads object keys case-insensitively and does not use `columns`.
 
 ## Row types
-- **Purchase** = a cash expense. Fields: date, account, category, description, amount.
-- **Buy / Sell** = an asset trade. Fields: date, account, symbol, quantity, price.
-  > ⚠️ Buy/Sell row composition is currently a **placeholder**
-  > (`SheetTransactionModel._tradeRowsPlaceholder`). Replace it with the final
-  > trade-row logic (e.g. companion cash-transfer leg) when decided.
+- **Purchase** (stored Type: `Expense`) = a cash expense. **One row.** Fields:
+  date, account, category, description, amount — Amount is written
+  **negative** (cash out). Reading is lenient: both `Expense` and the legacy
+  `Purchase` parse back to the app's Purchase type.
+- **Buy / Sell** = an asset trade. The user enters date, brokerage cash
+  account, brokerage account, description, symbol, quantity, price — and the
+  app appends **two rows** (double-entry: each account's balance is the sum of
+  its signed Amounts). Composed by `SheetTransactionModel._tradeRows`:
+
+  | Row | Account | Type | Quantity | Amount (Buy) | Amount (Sell) |
+  | :-- | :-- | :-- | :-- | :-- | :-- |
+  | 1 (cash leg) | brokerage cash account | `Transfer` | *(blank)* | −qty × price | +qty × price |
+  | 2 (trade leg) | brokerage account | `Buy` / `Sell` | Buy: +qty, Sell: **−qty** | +qty × price | −qty × price |
+
+  The Sell quantity is written negative, so the trade leg's Amount is always
+  plain Quantity × Price. Both rows share the same Date and Description and go
+  in a single POST, so the append is all-or-nothing.
+- **Transfer** = a cash movement between accounts. Never entered directly in
+  the app — only generated as the cash leg above.
 
 ## Apps Script contract
 
@@ -72,13 +86,22 @@ The parser (`SheetTransactionModel.fromJson`) resolves keys
 **case-insensitively**, so capitalized or lowercase keys both work. The ticker
 field is read from `Symbol` first and falls back to `ticker`.
 
+Two read-side normalizations keep the app consistent with the sheet:
+- **Dates are UTC on the wire** — Apps Script serializes a KST `2026-02-01`
+  cell as `"2026-01-31T15:00:00.000Z"`. The parser converts to device-local
+  time, so the displayed day and month grouping match the sheet's calendar.
+- **Row order is preserved as a tiebreaker** — the app sorts newest-first by
+  date, and rows with identical timestamps (same-day entries, the two legs of
+  a trade) fall back to their sheet position (later rows first) instead of
+  shuffling arbitrarily.
+
 A bare top-level JSON array is also accepted.
 
 ### POST (append)
 Request: `POST {webAppUrl}` with body:
 
 ```json
-{ "apiKey": "…", "rows": [ ["2026-06-01T...", "BoA", "Purchase", "food", "Lunch", "", "", "", 12.5] ] }
+{ "apiKey": "…", "rows": [ ["2026-06-01T...", "BoA", "Expense", "식비", "Lunch", "", "", "", -12.5] ] }
 ```
 
 Each entry in `rows` is a value array in the column order above. Respond `200` on success.

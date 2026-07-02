@@ -12,13 +12,20 @@ class SheetTransaction {
     required this.type,
     this.category,
     this.description = '',
+    this.secondAccount,
     this.ticker,
     this.quantity,
     this.price,
     this.amount,
+    this.rowIndex = 0,
   });
 
+  /// Local-time transaction date. Sheet timestamps arrive as UTC ISO strings;
+  /// the data layer converts them so day/month grouping matches the sheet.
   final DateTime date;
+
+  /// The account this row belongs to. For a Buy/Sell being written, this is
+  /// the **cash account** the money leaves (Buy) or lands in (Sell).
   final String account;
   final TransactionType type;
 
@@ -26,17 +33,43 @@ class SheetTransaction {
   final TransactionCategory? category;
   final String description;
 
+  /// Write-only, Buy/Sell: the **brokerage account** holding the asset — the
+  /// trade row is written against it while [account] gets the Transfer cash
+  /// leg. Always null on rows read back from the sheet (each sheet row only
+  /// has its own Account column).
+  final String? secondAccount;
+
   // Trade-only fields (Buy / Sell).
   final String? ticker;
+
+  /// Sheet rows store Sell quantities **negative** (so Amount is always
+  /// quantity × price). The add-form passes the user's positive input; the
+  /// data layer applies the sign when writing.
   final double? quantity;
   final double? price;
 
-  /// Total value of the row.
-  /// - Purchase: the expense amount.
-  /// - Buy / Sell: quantity * price (the trade total).
+  /// Signed total value of the row, as stored in the sheet's Amount column.
+  /// - Purchase/Expense: stored **negative** (cash out); the add-form passes
+  ///   the user's positive input and the data layer applies the sign.
+  /// - Buy / Sell: quantity × price (negative for Sell via its quantity).
+  /// - Transfer: negative = cash out, positive = cash in.
   final double? amount;
+
+  /// Position of this row in the sheet (0-based, top to bottom), used to keep
+  /// a deterministic order between rows sharing the same [date]. 0 for
+  /// app-composed transactions that were never read back.
+  final int rowIndex;
 
   /// Convenience for trade rows when [amount] is not explicitly set.
   double get computedAmount =>
       amount ?? ((quantity ?? 0) * (price ?? 0));
+
+  /// Newest-first ordering: by [date], tie-broken by sheet position (later
+  /// rows first). Dart's sort is unstable, so without the tiebreak rows with
+  /// identical timestamps — same-day entries, the two legs of a trade —
+  /// would shuffle arbitrarily between refreshes.
+  static int newestFirst(SheetTransaction a, SheetTransaction b) {
+    final byDate = b.date.compareTo(a.date);
+    return byDate != 0 ? byDate : b.rowIndex.compareTo(a.rowIndex);
+  }
 }
