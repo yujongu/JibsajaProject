@@ -28,6 +28,19 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+
+# App launcher icon generation. Regenerate with:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  # Android adaptive icon (API 26+): layered background + foreground.
+  adaptive_icon_background: "assets/icon/icon_background.png"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  # iOS icons must be opaque; icon.png already has a solid background.
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: true
