@@ -35,7 +35,7 @@ class JibsajaApp extends StatelessWidget {
   }
 }
 
-/// Two-tab shell: Transactions and Dashboard. Uses an [IndexedStack] so each
+/// Two-tab shell: Dashboard and Transactions. Uses an [IndexedStack] so each
 /// tab keeps its scroll position and provider state when switching.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -47,7 +47,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
-  static const _pages = [SheetViewPage(), DashboardPage()];
+  static const _pages = [DashboardPage(), SheetViewPage()];
 
   @override
   Widget build(BuildContext context) {
@@ -97,15 +97,15 @@ class _BottomNav extends StatelessWidget {
           child: Row(
             children: [
               _NavItem(
-                icon: Icons.receipt_long_rounded,
-                label: 'Transactions',
+                icon: Icons.pie_chart_rounded,
+                label: 'Dashboard',
                 selected: index == 0,
                 isDark: isDark,
                 onTap: () => onTap(0),
               ),
               _NavItem(
-                icon: Icons.pie_chart_rounded,
-                label: 'Dashboard',
+                icon: Icons.receipt_long_rounded,
+                label: 'Transactions',
                 selected: index == 1,
                 isDark: isDark,
                 onTap: () => onTap(1),
