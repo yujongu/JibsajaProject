@@ -1,11 +1,31 @@
 # HANDOVER
 
 ## Current Milestone
-**Dashboard page — implemented (2026-07-01).** Second tab showing a read-only
-portfolio snapshot sourced entirely from the sheet's `DashboardDB1` tab. Analyzer
-clean, 13/13 tests pass. APK build is done by the user (`flutter build apk --release`).
+**Dashboard reliability + app icon (2026-07-02).** Fixed the Dashboard page's
+"connection abort" crash and applied the new launcher icon. Analyzer clean,
+13/13 tests pass, release APK built (50.0 MB). Both changes committed on `main`
+(not pushed).
 
-### What shipped this session
+### What shipped this session (2026-07-02)
+- **Fixed `ClientException: software caused connection abort` on the Dashboard
+  page.** Root cause diagnosed via curl: the `DashboardDB1` read consistently
+  takes **~10–13s** (live formulas recalculate on read; the JSON is only 13KB, so
+  it is latency, not size) vs ~2s for Transactions. That sat right at the old
+  **15s** HTTP timeout, so on-device the socket was torn down mid-response.
+  - Fix in `sheets_repository_impl.dart`: `_timeout` raised **15s → 30s**; added a
+    `_get()` helper that retries a transient transport failure **once** on a fresh
+    client for the idempotent GETs. **POST is deliberately not retried** (never
+    duplicate a row append). Injected test clients are reused as-is, never retried.
+  - Commit `05d92ce`.
+- **New app launcher icon** (asset-tracker trend-line). Wired
+  `flutter_launcher_icons: ^0.14.3` into `pubspec.yaml`; source PNGs live in
+  `assets/icon/` (`icon.png` + adaptive `icon_background.png`/`icon_foreground.png`).
+  Generated Android adaptive icons (all densities, foreground inset 16%) and the
+  full iOS appiconset. Regenerate with `dart run flutter_launcher_icons`. The
+  user's original `Asset tracker app icon/` folder was applied then deleted.
+  Commit `bf7f079`.
+
+### Previously shipped (2026-07-01) — Dashboard page
 - **New backend wired up.** `AppConfig.sheetsWebAppUrl` updated to the new `/exec`
   URL and `sheetsApiKey` set to `jibsaja-secret-2024-xk9m` (matches `API_KEY` in
   `Code.gs`). The old URL was stale.
@@ -46,12 +66,23 @@ clean, 13/13 tests pass. APK build is done by the user (`flutter build apk --rel
   transparent (see `app_theme.dart` comment). Still no router.
 
 ## The 'Gravel'
-- **APK not built by this session** — user builds it (`flutter build apk --release`,
-  output `build/app/outputs/flutter-apk/app-release.apk`). Not yet verified on the
-  physical device.
-- **Live Dashboard render unverified.** `fromGrid` is unit-tested against a slice
-  of the real grid, and the raw endpoint was fetched successfully via curl, but
-  the page has not been run on-device against live data yet.
+- **The 30s timeout is a mitigation, not a cure.** The real problem is the ~10–13s
+  server-side `DashboardDB1` read. If a durable fix is wanted, speed up that read
+  (it is slow because the tab's formulas recalc on every `getDataRange().getValues()`
+  in `Code.gs` `readGrid`) — e.g. cache/snapshot the KPIs to static values, or bound
+  the read range. Until then the Dashboard will always take ~10s+ to load and the
+  single retry can push worst-case wait toward ~60s before it errors.
+- **APK built this session but NOT verified on-device.** Output at
+  `build/app/outputs/flutter-apk/app-release.apk` (50.0 MB). The Dashboard fix and
+  new icon still need a real-device sanity check (does the Dashboard now load, does
+  the launcher icon look right).
+- **Adaptive icon foreground may render small.** `icon_foreground.png`'s artwork
+  sits small/centered on its 1024² canvas, and Android insets it a further 16% +
+  masks corners. The full `icon.png` looks fine; if the home-screen icon feels tiny,
+  enlarge the foreground artwork and re-run `dart run flutter_launcher_icons`.
+- **Live Dashboard render still unverified.** `fromGrid` is unit-tested against a
+  slice of the real grid, and the raw endpoint was fetched successfully via curl,
+  but the page has not been run on-device against live data yet.
 - **`currency_formatter.dart` still fully unused.** Dashboard uses its own local
   `_krw`/`_usd`/`_rate` intl helpers (mirrors `sheet_view_page`'s local `_num`).
   Delete `currency_formatter.dart` if it stays unused.
@@ -64,11 +95,15 @@ clean, 13/13 tests pass. APK build is done by the user (`flutter build apk --rel
   unchanged this session, unrelated to the dashboard.
 
 ## Next Immediate Step
-1. **Build + install the APK** and open the **Dashboard** tab against live data;
-   confirm the four KPI cards, net-worth hero, totals, investment card, and the
-   USD/KRW sparkline all render with sensible numbers.
-2. If any label doesn't resolve (shows 0), check the exact cell text in
+1. **Install the freshly built APK** (`flutter install` or
+   `adb install -r build/app/outputs/flutter-apk/app-release.apk`) and open the
+   **Dashboard** tab: confirm it now loads (no connection-abort) and that the four
+   KPI cards, net-worth hero, totals, investment card, and USD/KRW sparkline all
+   render with sensible numbers. Also check the new launcher icon.
+2. If the Dashboard still fails or feels too slow, tackle the server-side
+   `DashboardDB1` read time (see Gravel) rather than nudging the client timeout again.
+3. If any label doesn't resolve (shows 0), check the exact cell text in
    `DashboardDB1` vs the anchors in `dashboard_summary_model.dart` (watch for
    trailing spaces / full-width chars).
-3. Optional follow-ups: include crypto + card debt via the `Accounts` tab;
-   delete unused `currency_formatter.dart`.
+4. Optional follow-ups: `git push` the two new commits; include crypto + card debt
+   via the `Accounts` tab; delete unused `currency_formatter.dart`.
