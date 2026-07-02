@@ -20,7 +20,34 @@ class SheetsRepositoryImpl implements ISheetsRepository {
   /// Injectable for tests; defaults to a one-shot [http.Client] per call.
   final http.Client? client;
 
-  static const _timeout = Duration(seconds: 15);
+  /// The `DashboardDB1` tab's live formulas make its read take ~10–13s, so the
+  /// timeout must clear that with margin — a tighter bound tears the socket down
+  /// mid-response on mobile ("software caused connection abort").
+  static const _timeout = Duration(seconds: 30);
+
+  /// GETs are idempotent, so retry a transient transport failure once with a
+  /// fresh connection before giving up.
+  static const _maxGetAttempts = 2;
+
+  /// Runs an idempotent GET with a per-attempt timeout, retrying transient
+  /// transport errors (e.g. connection aborts) on a fresh client. When a
+  /// [client] is injected (tests) it is reused as-is and never retried/closed.
+  Future<http.Response> _get(Uri uri) async {
+    Object lastError = StateError('no attempts made');
+    for (var attempt = 1; attempt <= _maxGetAttempts; attempt++) {
+      final c = client ?? http.Client();
+      try {
+        return await c.get(uri).timeout(_timeout);
+      } on Exception catch (e) {
+        lastError = e;
+        if (client != null || attempt == _maxGetAttempts) rethrow;
+        debugPrint('SheetsRepository._get: attempt $attempt failed ($e), retrying');
+      } finally {
+        if (client == null) c.close();
+      }
+    }
+    throw lastError; // unreachable: last attempt rethrows above.
+  }
 
   @override
   Future<Result<List<SheetTransaction>>> fetchTransactions() async {
@@ -29,14 +56,13 @@ class SheetsRepositoryImpl implements ISheetsRepository {
           'AppConfig.sheetsWebAppUrl in lib/core/config/app_config.dart.');
     }
 
-    final c = client ?? http.Client();
     try {
       final uri = Uri.parse(AppConfig.sheetsWebAppUrl).replace(
         queryParameters: {
           if (AppConfig.sheetsApiKey.isNotEmpty) 'apiKey': AppConfig.sheetsApiKey,
         },
       );
-      final resp = await c.get(uri).timeout(_timeout);
+      final resp = await _get(uri);
 
       if (resp.statusCode != 200) {
         return Failure('Sheet returned ${resp.statusCode}: ${resp.body}');
@@ -68,8 +94,6 @@ class SheetsRepositoryImpl implements ISheetsRepository {
     } catch (e) {
       debugPrint('SheetsRepository.fetch: $e');
       return Failure(e);
-    } finally {
-      if (client == null) c.close();
     }
   }
 
@@ -80,7 +104,6 @@ class SheetsRepositoryImpl implements ISheetsRepository {
           'AppConfig.sheetsWebAppUrl in lib/core/config/app_config.dart.');
     }
 
-    final c = client ?? http.Client();
     try {
       final uri = Uri.parse(AppConfig.sheetsWebAppUrl).replace(
         queryParameters: {
@@ -88,7 +111,7 @@ class SheetsRepositoryImpl implements ISheetsRepository {
           if (AppConfig.sheetsApiKey.isNotEmpty) 'apiKey': AppConfig.sheetsApiKey,
         },
       );
-      final resp = await c.get(uri).timeout(_timeout);
+      final resp = await _get(uri);
 
       if (resp.statusCode != 200) {
         return Failure('Sheet returned ${resp.statusCode}: ${resp.body}');
@@ -121,8 +144,6 @@ class SheetsRepositoryImpl implements ISheetsRepository {
     } catch (e) {
       debugPrint('SheetsRepository.fetchDashboard: $e');
       return Failure(e);
-    } finally {
-      if (client == null) c.close();
     }
   }
 
