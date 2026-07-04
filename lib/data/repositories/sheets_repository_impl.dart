@@ -8,6 +8,7 @@ import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/result.dart';
 import '../../domain/entities/sheet_transaction.dart';
 import '../../domain/repositories/i_sheets_repository.dart';
+import '../datasources/sheets_local_cache.dart';
 import '../models/dashboard_summary_model.dart';
 import '../models/sheet_transaction_model.dart';
 
@@ -15,10 +16,14 @@ import '../models/sheet_transaction_model.dart';
 /// - GET  → returns all transaction rows as JSON.
 /// - POST → appends row(s) for a new transaction.
 class SheetsRepositoryImpl implements ISheetsRepository {
-  const SheetsRepositoryImpl({this.client});
+  const SheetsRepositoryImpl({this.client, this.cache});
 
   /// Injectable for tests; defaults to a one-shot [http.Client] per call.
   final http.Client? client;
+
+  /// Optional on-device cache of the last successful responses; when absent,
+  /// [cachedTransactions] and [cachedDashboard] simply return null.
+  final SheetsLocalCache? cache;
 
   /// The `DashboardDB1` tab's live formulas make its read take ~10–13s, so the
   /// timeout must clear that with margin — a tighter bound tears the socket down
@@ -30,14 +35,24 @@ class SheetsRepositoryImpl implements ISheetsRepository {
   static const _maxGetAttempts = 2;
 
   /// Runs an idempotent GET with a per-attempt timeout, retrying transient
-  /// transport errors (e.g. connection aborts) on a fresh client. When a
-  /// [client] is injected (tests) it is reused as-is and never retried/closed.
+  /// transport errors (e.g. connection aborts) and transient HTTP statuses
+  /// (429/5xx — Apps Script answers concurrent cold-start bursts with these)
+  /// on a fresh client. When a [client] is injected (tests) it is reused
+  /// as-is and never retried/closed.
   Future<http.Response> _get(Uri uri) async {
     Object lastError = StateError('no attempts made');
     for (var attempt = 1; attempt <= _maxGetAttempts; attempt++) {
       final c = client ?? http.Client();
       try {
-        return await c.get(uri).timeout(_timeout);
+        final resp = await c.get(uri).timeout(_timeout);
+        if (client == null &&
+            attempt < _maxGetAttempts &&
+            (resp.statusCode == 429 || resp.statusCode >= 500)) {
+          debugPrint('SheetsRepository._get: attempt $attempt got '
+              '${resp.statusCode}, retrying');
+          continue;
+        }
+        return resp;
       } on Exception catch (e) {
         lastError = e;
         if (client != null || attempt == _maxGetAttempts) rethrow;
@@ -78,25 +93,43 @@ class SheetsRepositoryImpl implements ISheetsRepository {
             'access set to "Anyone".');
       }
 
-      final decoded = jsonDecode(resp.body);
-      final rawRows = decoded is Map<String, dynamic>
-          ? (decoded['rows'] as List? ?? const [])
-          : (decoded as List? ?? const []);
-
-      // The list index is the row's sheet position — kept as the sort
-      // tiebreaker so same-timestamp rows stay in a deterministic order.
-      final txs = [
-        for (var i = 0; i < rawRows.length; i++)
-          if (rawRows[i] case final Map r)
-            SheetTransactionModel.fromJson(
-                r.map((k, v) => MapEntry(k.toString(), v)),
-                rowIndex: i),
-      ]..sort(SheetTransaction.newestFirst);
-
+      final txs = _parseTransactionsBody(resp.body);
+      // Persist the raw body only after it parsed, so a later cache read
+      // can't hit junk.
+      cache?.writeTransactions(resp.body);
       return Success(txs);
     } catch (e) {
       debugPrint('SheetsRepository.fetch: $e');
       return Failure(e);
+    }
+  }
+
+  static List<SheetTransaction> _parseTransactionsBody(String body) {
+    final decoded = jsonDecode(body);
+    final rawRows = decoded is Map<String, dynamic>
+        ? (decoded['rows'] as List? ?? const [])
+        : (decoded as List? ?? const []);
+
+    // The list index is the row's sheet position — kept as the sort
+    // tiebreaker so same-timestamp rows stay in a deterministic order.
+    return [
+      for (var i = 0; i < rawRows.length; i++)
+        if (rawRows[i] case final Map r)
+          SheetTransactionModel.fromJson(
+              r.map((k, v) => MapEntry(k.toString(), v)),
+              rowIndex: i),
+    ]..sort(SheetTransaction.newestFirst);
+  }
+
+  @override
+  List<SheetTransaction>? cachedTransactions() {
+    final body = cache?.readTransactions();
+    if (body == null) return null;
+    try {
+      return _parseTransactionsBody(body);
+    } catch (e) {
+      debugPrint('SheetsRepository.cachedTransactions: $e');
+      return null;
     }
   }
 
@@ -128,37 +161,63 @@ class SheetsRepositoryImpl implements ISheetsRepository {
             'access set to "Anyone".');
       }
 
-      final decoded = jsonDecode(resp.body);
-      if (decoded is! Map<String, dynamic>) {
-        return const Failure('Unexpected dashboard response shape.');
+      final parsed = _parseDashboardBody(resp.body);
+      if (parsed.isSuccess) {
+        cache?.writeDashboard(resp.body);
       }
-      // The endpoint reports its own failures as {"error": "..."} with 200.
-      final error = decoded['error'];
-      if (error != null) {
-        return Failure('Sheet error: $error');
-      }
-
-      // A deployed Apps Script that predates ?sheet= support ignores the param
-      // and answers with the transactions {"rows": ...} payload instead — every
-      // KPI would silently parse as 0, so fail loudly with the redeploy hint.
-      final rawGrid = decoded['grid'];
-      if (rawGrid is! List) {
-        return const Failure(
-            'Dashboard response has no "grid" — the deployed Apps Script is an '
-            'old version without ?sheet= support. Redeploy '
-            'docs/apps_script/Code.gs as a new version (Deploy → Manage '
-            'deployments → Edit → New version).');
-      }
-      final grid = rawGrid
-          .map<List<dynamic>>((row) => row is List ? row : const [])
-          .toList();
-
-      return Success(DashboardSummaryModel.fromGrid(grid));
+      return parsed;
     } catch (e) {
       debugPrint('SheetsRepository.fetchDashboard: $e');
       return Failure(e);
     }
   }
+
+  static Result<DashboardSummary> _parseDashboardBody(String body) {
+    final decoded = jsonDecode(body);
+    if (decoded is! Map<String, dynamic>) {
+      return const Failure('Unexpected dashboard response shape.');
+    }
+    // The endpoint reports its own failures as {"error": "..."} with 200.
+    final error = decoded['error'];
+    if (error != null) {
+      return Failure('Sheet error: $error');
+    }
+
+    // A deployed Apps Script that predates ?sheet= support ignores the param
+    // and answers with the transactions {"rows": ...} payload instead — every
+    // KPI would silently parse as 0, so fail loudly with the redeploy hint.
+    final rawGrid = decoded['grid'];
+    if (rawGrid is! List) {
+      return const Failure(
+          'Dashboard response has no "grid" — the deployed Apps Script is an '
+          'old version without ?sheet= support. Redeploy '
+          'docs/apps_script/Code.gs as a new version (Deploy → Manage '
+          'deployments → Edit → New version).');
+    }
+    final grid = rawGrid
+        .map<List<dynamic>>((row) => row is List ? row : const [])
+        .toList();
+
+    return Success(DashboardSummaryModel.fromGrid(grid));
+  }
+
+  @override
+  DashboardSummary? cachedDashboard() {
+    final body = cache?.readDashboard();
+    if (body == null) return null;
+    try {
+      return _parseDashboardBody(body).valueOrNull;
+    } catch (e) {
+      debugPrint('SheetsRepository.cachedDashboard: $e');
+      return null;
+    }
+  }
+
+  @override
+  DateTime? cachedTransactionsAt() => cache?.transactionsTimestamp();
+
+  @override
+  DateTime? cachedDashboardAt() => cache?.dashboardTimestamp();
 
   @override
   Future<Result<void>> appendTransaction(SheetTransaction tx) async {

@@ -11,6 +11,7 @@ import '../../providers/sheets_providers.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/error_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
+import '../../shared/widgets/updated_at_label.dart';
 import '../../widgets/add_transaction_sheet.dart';
 
 /// Formats a bare number with grouping and up to 2 decimals. No currency
@@ -46,17 +47,22 @@ class SheetViewPage extends ConsumerWidget {
           onRefresh: () async => ref.invalidate(transactionsProvider),
           child: async.when(
             loading: () => const _LoadingList(),
-            error: (e, _) => ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                const SizedBox(height: 80),
-                ErrorCard(
-                  error: e,
-                  isDark: isDark,
-                  onRetry: () => ref.invalidate(transactionsProvider),
-                ),
-              ],
-            ),
+            // While a refetch is in flight, `when` re-surfaces the previous
+            // state — showing a stale error card during the reload reads as
+            // "still broken", so show the loading list until it resolves.
+            error: (e, _) => async.isLoading
+                ? const _LoadingList()
+                : ListView(
+                    padding: const EdgeInsets.all(20),
+                    children: [
+                      const SizedBox(height: 80),
+                      ErrorCard(
+                        error: e,
+                        isDark: isDark,
+                        onRetry: () => ref.invalidate(transactionsProvider),
+                      ),
+                    ],
+                  ),
             data: (txs) => txs.isEmpty
                 ? _EmptyState(isDark: isDark)
                 : _TransactionsList(isDark: isDark),
@@ -76,10 +82,12 @@ class _TransactionsList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(currentMonthSummaryProvider);
     final months = ref.watch(transactionsByMonthProvider);
+    final updatedAt = ref.watch(transactionsUpdatedAtProvider);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
       children: [
+        UpdatedAtLabel(updatedAt: updatedAt, isDark: isDark),
         _SummaryHeader(summary: summary, isDark: isDark),
         const SizedBox(height: 20),
         for (final group in months) ...[

@@ -1,11 +1,69 @@
 # HANDOVER
 
 ## Current Milestone
+**Startup cache — no more empty loading screen (2026-07-04).** The last
+successful transactions + dashboard responses are now persisted on-device
+(`shared_preferences`) and rendered instantly on cold start while the live
+fetch revalidates in the background (stale-while-revalidate). Analyzer clean,
+30/30 tests pass. **This session's changes are uncommitted.**
+
+### What shipped this session (2026-07-04)
+- **New**: `lib/data/datasources/sheets_local_cache.dart` — stores the *raw
+  JSON response bodies* under `cache.transactions.body.v1` /
+  `cache.dashboard.body.v1`.
+- **Repository** (`sheets_repository_impl.dart`): parsing extracted into
+  `_parseTransactionsBody` / `_parseDashboardBody`, shared by the live fetch
+  and the new sync `cachedTransactions()` / `cachedDashboard()` (added to
+  `ISheetsRepository`). Cache is written only after a body parses
+  successfully; a corrupt/stale cached body reads back as null, never throws.
+- **Providers** (`sheets_providers.dart`): `transactionsProvider` and
+  `dashboardProvider` are now `StreamProvider`s — yield cached data first (if
+  any), then the live result. If the live fetch fails *and* cache was shown,
+  the error is swallowed (debugPrint only); with no cache it throws as before
+  so the ErrorCard still appears on true first-run failures. New
+  `sharedPreferencesProvider`, overridden in `main()` (prefs loaded before
+  `runApp` so cache reads are synchronous at first frame).
+- **Tests**: `test/data/repositories/sheets_repository_cache_test.dart` —
+  cache round-trip, failed-fetch-doesn't-overwrite, corrupt-body → null,
+  dashboard error payload not cached.
+- **"Could not load data at startup" hardening** (user report, same session).
+  User saw the error card on both pages at launch before live data arrived.
+  Verified via provider state-sequence tests that cache-present runs never
+  emit an error — so the on-device error means **empty cache + failed startup
+  fetch**. Three deterministic fixes:
+  1. `_get()` now also retries transient HTTP statuses (429/5xx — Apps Script
+     rejects concurrent cold-start bursts with these), not just transport
+     exceptions. Injected test clients still never retry.
+  2. `_cachedThenLive()` (new shared stream loop in `sheets_providers.dart`):
+     on a no-cache cold start, a failed fetch is retried once after 2s
+     (`_coldStartAttempts`/`_coldStartRetryDelay`) before the error surfaces.
+     Cache-present behavior unchanged (failure keeps cache, no retry).
+  3. Both pages: while a refetch is in flight after a previous error,
+     `async.isLoading` in the error branch shows the loading shimmer instead
+     of re-surfacing the stale error card (Riverpod's `skipLoadingOnRefresh`
+     otherwise re-shows the previous error during the whole reload).
+  New `test/presentation/providers/sheets_providers_test.dart` (scriptable
+  fake repo, records AsyncValue sequences; 38 tests total).
+- **"Updated Xm ago" freshness caption** (user request, same session): cache
+  now also stores a fetch timestamp (`cache.*.at.v1`, epoch ms) written
+  alongside each body; exposed via `cachedTransactionsAt()` /
+  `cachedDashboardAt()` on the repository, surfaced through
+  `transactionsUpdatedAtProvider` / `dashboardUpdatedAtProvider` (they watch
+  the data providers, so they re-read the moment live data lands). New shared
+  widget `lib/presentation/shared/widgets/updated_at_label.dart` renders a
+  tiny centered "Updated just now / 12m ago / 5h ago / Jul 1, 09:05" caption
+  at the top of both the Dashboard and Transactions lists; a private
+  minute-ticker StreamProvider keeps the relative label aging while the app
+  sits open. Hidden until the first-ever successful fetch. 34 tests total now
+  (label formatter + timestamp coverage added).
+
+## Previous Milestone
 **Buy/Sell two-row trade composition (2026-07-02, session 3).** Replaced the
 Buy/Sell placeholder with the real double-entry logic the user specced: every
 trade appends TWO rows — a `Transfer` cash leg on the first (cash) account and
 the `Buy`/`Sell` trade leg on the second (brokerage) account. Analyzer clean,
-17/17 tests pass. **Uncommitted** (as is the session-2 work below).
+17/17 tests pass. Committed as `2a8f223` (with session 2's work in earlier
+commits).
 
 ### What shipped this session (2026-07-02, session 3)
 - **User-confirmed spec** (Sell is the exact mirror of Buy; revised same
@@ -111,6 +169,20 @@ the `Buy`/`Sell` trade leg on the second (brokerage) account. Analyzer clean,
   (CustomPaint, no charting dep), plus `fetchDashboard()` through repo/provider.
 
 ## Context & Logic Decisions
+- **Cache stores raw response bodies, not serialized entities.** Entities have
+  no `toJson`; caching the body means one parser for live + cached data, and a
+  future schema change degrades to "no cache" instead of a migration.
+- **StreamProvider over AsyncNotifier for cache-first emit.** A `FutureProvider`
+  can only resolve once; `async*` yields cached-then-live naturally, and
+  `AsyncValue.when`'s default `skipLoadingOnRefresh` keeps pull-to-refresh
+  behavior identical.
+- **Failed refresh keeps stale data silently (when cache exists).** Rationale:
+  stale numbers beat an error card for a glance-first app; the error still
+  surfaces when there is nothing cached. The "Updated Xm ago" caption is the
+  staleness signal — after a failed silent refresh it honestly keeps aging.
+- **Freshness = cache write time, not a separate clock.** The timestamp is
+  written in the same `write*` call as the body, so "Updated X ago" is by
+  construction the age of the data on screen — including the offline case.
 - **Parse by label-anchor, not fixed cells.** `DashboardSummaryModel.fromGrid`
   finds each Korean label cell and reads the cell(s) to its right (dual-currency
   totals: USD at +1, KRW at +2). Survives row/column inserts in the sheet.
@@ -137,6 +209,11 @@ KPI (e.g. totalAssetsKrw ≈ ₩270.6M, returnRate ≈ +25.9%, 179 FX points).
 Bonus: the new deployment answers in ~2.6s vs the old ~13s.
 
 ## The 'Gravel'
+- **The freshness label only ticks per minute** and the empty-transactions
+  state (`_EmptyState`) doesn't show it — both fine, just deliberate.
+- **Cache is unbounded**: the full transactions body is one prefs string; fine
+  for years of personal data, but SharedPreferences loads it all into memory.
+  Switch to a file (path_provider) if the sheet ever gets huge.
 - **The OLD Apps Script deployment (`AKfycbz4_GJUe...`) is still active** and
   serves stale code. Nothing points at it anymore, but archive it in
   Deploy → Manage deployments to avoid future confusion.
@@ -162,11 +239,15 @@ Bonus: the new deployment answers in ~2.6s vs the old ~13s.
   prefers.
 
 ## Next Immediate Step
-1. **Verify Buy/Sell on-device**: add a small Buy, check the sheet gets the
-   Transfer (−amount) + Buy (+amount) pair, then a Sell for the mirror.
-2. Commit both sessions' work (trade composition + form; icon assets +
-   mipmaps/appiconset, `main.dart`, `sheets_repository_impl.dart`,
-   `HANDOVER.md`; `app_config.dart` is gitignored — the endpoint URL lives only
-   there). Optional: `git push` (2 earlier commits also unpushed), Accounts-tab
-   crypto/debt, delete unused `currency_formatter.dart`, archive the old Apps
-   Script deployment.
+1. **Verify on-device that the startup error is gone**: fresh install (or
+   clear app data) + launch → should shimmer, retry silently if the first
+   fetch hiccups, and only error if the network is truly down. Then relaunch —
+   cached data should paint instantly with the "Updated …" caption. If the
+   error card still appears, **the small text under "Could not load data" is
+   the actual exception — capture it**, it pinpoints the remaining cause.
+2. Commit this session's work (`pubspec.yaml`, `pubspec.lock`, `main.dart`,
+   `sheets_local_cache.dart`, `i_sheets_repository.dart`,
+   `sheets_repository_impl.dart`, `sheets_providers.dart`,
+   `updated_at_label.dart`, both pages, new test files, `HANDOVER.md`). Optional backlog: `git push`, Accounts-tab crypto/debt,
+   delete unused `currency_formatter.dart`, archive the old Apps Script
+   deployment, verify Buy/Sell on-device (carried over from session 3).

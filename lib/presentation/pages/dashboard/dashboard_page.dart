@@ -7,6 +7,7 @@ import '../../providers/sheets_providers.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/error_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
+import '../../shared/widgets/updated_at_label.dart';
 import 'fx_sparkline.dart';
 
 String _krw(double v) => '₩${NumberFormat('#,##0', 'en_US').format(v)}';
@@ -42,18 +43,27 @@ class DashboardPage extends ConsumerWidget {
           onRefresh: () async => ref.invalidate(dashboardProvider),
           child: async.when(
             loading: () => const _LoadingView(),
-            error: (e, _) => ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                const SizedBox(height: 80),
-                ErrorCard(
-                  error: e,
-                  isDark: isDark,
-                  onRetry: () => ref.invalidate(dashboardProvider),
-                ),
-              ],
+            // While a refetch is in flight, `when` re-surfaces the previous
+            // state — showing a stale error card during the reload reads as
+            // "still broken", so show the loading view until it resolves.
+            error: (e, _) => async.isLoading
+                ? const _LoadingView()
+                : ListView(
+                    padding: const EdgeInsets.all(20),
+                    children: [
+                      const SizedBox(height: 80),
+                      ErrorCard(
+                        error: e,
+                        isDark: isDark,
+                        onRetry: () => ref.invalidate(dashboardProvider),
+                      ),
+                    ],
+                  ),
+            data: (d) => _DashboardBody(
+              summary: d,
+              isDark: isDark,
+              updatedAt: ref.watch(dashboardUpdatedAtProvider),
             ),
-            data: (d) => _DashboardBody(summary: d, isDark: isDark),
           ),
         ),
       ),
@@ -62,15 +72,21 @@ class DashboardPage extends ConsumerWidget {
 }
 
 class _DashboardBody extends StatelessWidget {
-  const _DashboardBody({required this.summary, required this.isDark});
+  const _DashboardBody({
+    required this.summary,
+    required this.isDark,
+    required this.updatedAt,
+  });
   final DashboardSummary summary;
   final bool isDark;
+  final DateTime? updatedAt;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
+        UpdatedAtLabel(updatedAt: updatedAt, isDark: isDark),
         _NetWorthHero(summary: summary),
         const SizedBox(height: 20),
         _SectionLabel('Holdings', isDark: isDark),

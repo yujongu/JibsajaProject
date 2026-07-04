@@ -1,41 +1,108 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../data/datasources/sheets_local_cache.dart';
 import '../../data/repositories/sheets_repository_impl.dart';
 import '../../domain/entities/dashboard_summary.dart';
+import '../../domain/entities/result.dart';
 import '../../domain/entities/sheet_transaction.dart';
 import '../../domain/entities/transaction_summary.dart';
 import '../../domain/repositories/i_sheets_repository.dart';
 
+/// Initialized in `main()` before `runApp` and injected via override, so
+/// cached sheet data is readable synchronously from the first frame.
+final sharedPreferencesProvider = Provider<SharedPreferences>(
+  (_) => throw UnimplementedError(
+      'sharedPreferencesProvider must be overridden in main()'),
+);
+
 /// Single data boundary for the whole app.
 final sheetsRepositoryProvider = Provider<ISheetsRepository>(
-  (_) => const SheetsRepositoryImpl(),
+  (ref) => SheetsRepositoryImpl(
+    cache: SheetsLocalCache(ref.watch(sharedPreferencesProvider)),
+  ),
 );
+
+/// How often a no-cache cold start re-attempts a failed fetch before giving
+/// up, and the pause between attempts. Cold boots hit transient failures
+/// (network stack warming up, Apps Script rejecting concurrent bursts), so
+/// erroring on the first miss is premature when there is nothing else to show.
+const _coldStartAttempts = 2;
+const _coldStartRetryDelay = Duration(seconds: 2);
+
+/// Shared cache-first fetch loop for [transactionsProvider] /
+/// [dashboardProvider]:
+/// - yields [cached] immediately when present, then the live fetch;
+/// - a failed refresh keeps the cached value on screen (error only logged);
+/// - with no cache, transient failures are retried before the error surfaces.
+Stream<T> _cachedThenLive<T>({
+  required T? cached,
+  required Future<Result<T>> Function() fetch,
+  required String label,
+}) async* {
+  if (cached != null) yield cached;
+
+  for (var attempt = 1; attempt <= _coldStartAttempts; attempt++) {
+    final result = await fetch();
+    switch (result) {
+      case Success(:final value):
+        yield value;
+        return;
+      case Failure(:final error):
+        if (cached != null) {
+          debugPrint('$label: refresh failed, keeping cached data ($error)');
+          return;
+        }
+        if (attempt == _coldStartAttempts) throw error;
+        debugPrint('$label: attempt $attempt failed ($error), retrying');
+    }
+    await Future<void>.delayed(_coldStartRetryDelay);
+  }
+}
 
 /// All transaction rows from the sheet (newest first).
 ///
-/// Throws on failure so the UI can render the error via `AsyncValue.when`.
+/// Emits the last persisted rows immediately (when present) so a cold start
+/// renders instantly, then the live fetch. A failed refresh keeps the cached
+/// rows on screen; the error only surfaces when there is nothing to show.
 /// Refresh with `ref.invalidate(transactionsProvider)`.
 final transactionsProvider =
-    FutureProvider<List<SheetTransaction>>((ref) async {
+    StreamProvider<List<SheetTransaction>>((ref) {
   final repo = ref.watch(sheetsRepositoryProvider);
-  final result = await repo.fetchTransactions();
-  return result.when(
-    success: (txs) => txs,
-    failure: (e) => throw e,
+  return _cachedThenLive(
+    cached: repo.cachedTransactions(),
+    fetch: repo.fetchTransactions,
+    label: 'transactionsProvider',
   );
 });
 
 /// Pre-computed portfolio snapshot from the `DashboardDB1` tab.
 ///
-/// Throws on failure so the UI can render the error via `AsyncValue.when`.
+/// Same cache-first behavior as [transactionsProvider].
 /// Refresh with `ref.invalidate(dashboardProvider)`.
-final dashboardProvider = FutureProvider<DashboardSummary>((ref) async {
+final dashboardProvider = StreamProvider<DashboardSummary>((ref) {
   final repo = ref.watch(sheetsRepositoryProvider);
-  final result = await repo.fetchDashboard();
-  return result.when(
-    success: (d) => d,
-    failure: (e) => throw e,
+  return _cachedThenLive(
+    cached: repo.cachedDashboard(),
+    fetch: repo.fetchDashboard,
+    label: 'dashboardProvider',
   );
+});
+
+/// When the transaction rows currently on screen were fetched from the sheet
+/// (== the cache write time of the last successful fetch). Null until the
+/// first successful fetch ever. Re-reads whenever [transactionsProvider]
+/// emits, so it advances the moment live data lands.
+final transactionsUpdatedAtProvider = Provider<DateTime?>((ref) {
+  ref.watch(transactionsProvider);
+  return ref.watch(sheetsRepositoryProvider).cachedTransactionsAt();
+});
+
+/// When the dashboard snapshot currently on screen was fetched from the sheet.
+final dashboardUpdatedAtProvider = Provider<DateTime?>((ref) {
+  ref.watch(dashboardProvider);
+  return ref.watch(sheetsRepositoryProvider).cachedDashboardAt();
 });
 
 /// Current-month aggregates (spending, net invested, spend by category) for
