@@ -1,6 +1,29 @@
 # HANDOVER
 
 ## Current Milestone
+**Direct Transfer entry (2026-07-04, later same day).** Transfer is now a
+fourth option in the add-transaction form. **User spec**: writes ONE row —
+Date, Account, Type `Transfer`, Description, and the value in the **Price**
+column; Category/Symbol/Quantity/Amount stay blank. (Distinct from the
+trade-generated cash-leg Transfers, which keep using signed Amount.)
+Analyzer clean, 40/40 tests. Committed.
+
+### What shipped (Transfer entry)
+- **Domain**: `TransactionType.userSelectable` now includes `transfer`;
+  `SheetTransaction.computedAmount` returns `price ?? 0` for Transfer rows
+  with no Amount (so the price-only rows display correctly in the list —
+  read-back trade legs still use their signed Amount).
+- **Data**: `SheetTransactionModel.toRows` transfer branch (one row, value at
+  index 7 / Price, Amount blank).
+- **Form** (`add_transaction_sheet.dart`): `_transferFields` = Amount +
+  Description; save maps the form's Amount input to the entity's `price`
+  field (that is where the sheet wants it); the type toggle picks up the 4th
+  chip automatically via `userSelectable` (cyan, existing `_typeColor`).
+- **Docs**: `docs/data/sheets.md` — Price/Amount column notes + a "directly
+  entered Transfer" row-type section.
+- **Tests**: toRows shape + read-back computedAmount-from-Price (40 total).
+
+## Previous Milestone
 **Startup cache — no more empty loading screen (2026-07-04).** The last
 successful transactions + dashboard responses are now persisted on-device
 (`shared_preferences`) and rendered instantly on cold start while the live
@@ -239,7 +262,11 @@ Bonus: the new deployment answers in ~2.6s vs the old ~13s.
   prefers.
 
 ## Next Immediate Step
-1. **Verify on-device that the startup error is gone**: fresh install (or
+1. **Verify Transfer on-device**: add a Transfer in the app, then check the
+   sheet row has the value in the Price column (and that the sheet's own
+   balance formulas treat it the way the user expects — the app is following
+   their spec verbatim). Already committed — on-device check still pending.
+2. **Verify on-device that the startup error is gone**: fresh install (or
    clear app data) + launch → should shimmer, retry silently if the first
    fetch hiccups, and only error if the network is truly down. Then relaunch —
    cached data should paint instantly with the "Updated …" caption. If the

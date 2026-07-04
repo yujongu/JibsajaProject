@@ -60,9 +60,15 @@ class SheetTransaction {
   /// app-composed transactions that were never read back.
   final int rowIndex;
 
-  /// Convenience for trade rows when [amount] is not explicitly set.
-  double get computedAmount =>
-      amount ?? ((quantity ?? 0) * (price ?? 0));
+  /// Convenience for rows whose [amount] is not explicitly set: trades fall
+  /// back to quantity × price; a directly entered Transfer stores its value
+  /// in the Price column only (Quantity and Amount blank), so Price IS the
+  /// row's value.
+  double get computedAmount {
+    if (amount != null) return amount!;
+    if (type == TransactionType.transfer) return price ?? 0;
+    return (quantity ?? 0) * (price ?? 0);
+  }
 
   /// Newest-first ordering: by [date], tie-broken by sheet position (later
   /// rows first). Dart's sort is unstable, so without the tiebreak rows with

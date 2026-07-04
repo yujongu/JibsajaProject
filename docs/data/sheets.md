@@ -34,8 +34,8 @@ its header documents how to deploy/redeploy. The shared secret is currently
 | 4   | Description | Short note |
 | 5   | Symbol      | Ticker symbol, Buy/Sell only |
 | 6   | Quantity    | Buy/Sell only. **Signed** — Sell rows store a negative quantity |
-| 7   | Price       | Buy/Sell only, always positive |
-| 8   | Amount      | **Signed.** Expense: **−amount** (cash out). Buy/Sell: quantity × price (Sell negative via its quantity). Transfer: − = cash out, + = cash in |
+| 7   | Price       | Buy/Sell: always positive. Also holds the **value of a directly entered Transfer** (see Row types) |
+| 8   | Amount      | **Signed.** Expense: **−amount** (cash out). Buy/Sell: quantity × price (Sell negative via its quantity). Trade-leg Transfer: − = cash out, + = cash in. Direct Transfer: **blank** |
 
 `SheetTransactionModel.columns` documents this POST value-array order (informational). The POST builder (`toRows`) writes positions directly; the GET parser reads object keys case-insensitively and does not use `columns`.
 
@@ -57,8 +57,14 @@ its header documents how to deploy/redeploy. The shared secret is currently
   The Sell quantity is written negative, so the trade leg's Amount is always
   plain Quantity × Price. Both rows share the same Date and Description and go
   in a single POST, so the append is all-or-nothing.
-- **Transfer** = a cash movement between accounts. Never entered directly in
-  the app — only generated as the cash leg above.
+- **Transfer** = a cash movement. Two shapes:
+  - *Trade cash leg* — generated automatically by a Buy/Sell (see above);
+    value in the signed **Amount** column.
+  - *Directly entered* (user spec, 2026-07-04) — **one row** from the app's
+    Transfer form: date, account, `Transfer`, description, and the value in
+    the **Price** column. Category, Symbol, Quantity and Amount stay blank.
+    The app reads such a row's value from Price
+    (`SheetTransaction.computedAmount`).
 
 ## Apps Script contract
 

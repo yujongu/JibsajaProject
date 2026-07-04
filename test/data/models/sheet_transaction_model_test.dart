@@ -161,6 +161,29 @@ void main() {
       expect(row[8], -12.5); // expenses store a negative Amount (cash out)
     });
 
+    test('direct transfer produces one row with the value in Price only', () {
+      final rows = SheetTransactionModel.toRows(SheetTransaction(
+        date: DateTime(2026, 7, 4),
+        account: 'Toss',
+        type: TransactionType.transfer,
+        description: 'Move to brokerage',
+        price: 500000,
+      ));
+
+      expect(rows, hasLength(1));
+      final row = rows.first;
+      expect(row.length, SheetTransactionModel.columns.length);
+      expect(row[0], DateTime(2026, 7, 4).toIso8601String());
+      expect(row[1], 'Toss');
+      expect(row[2], 'Transfer');
+      expect(row[3], ''); // category
+      expect(row[4], 'Move to brokerage');
+      expect(row[5], ''); // symbol
+      expect(row[6], ''); // quantity
+      expect(row[7], 500000); // user spec: the transfer value lives in Price
+      expect(row[8], ''); // amount stays blank
+    });
+
     test('buy produces a Transfer cash leg then the Buy trade leg', () {
       final rows = SheetTransactionModel.toRows(SheetTransaction(
         date: DateTime(2026, 7, 2),
@@ -254,6 +277,23 @@ void main() {
       expect(tx.type, TransactionType.transfer);
       expect(tx.account, 'BoA');
       expect(tx.computedAmount, -1500);
+    });
+
+    test('read-back direct transfer takes its value from Price', () {
+      final tx = SheetTransactionModel.fromJson({
+        'Date': '2026-07-04T00:00:00.000',
+        'Account': 'Toss',
+        'Type': 'Transfer',
+        'Description': 'Move to brokerage',
+        'Symbol': '',
+        'Quantity': '',
+        'Price': 500000,
+        'Amount': '',
+      });
+
+      expect(tx.type, TransactionType.transfer);
+      expect(tx.amount, isNull);
+      expect(tx.computedAmount, 500000);
     });
 
     test('computedAmount is quantity × price for read-back Sell rows', () {

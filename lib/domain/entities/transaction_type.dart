@@ -2,18 +2,18 @@
 /// - [purchase]: a cash expense (amount + category + description).
 /// - [buy] / [sell]: an asset trade (ticker + quantity + price). Writing one
 ///   also writes a companion [transfer] row for the cash leg.
-/// - [transfer]: a cash movement between accounts. Never entered directly in
-///   the app — it is generated as the cash leg of a Buy/Sell (signed amount:
-///   negative = cash out, positive = cash in).
+/// - [transfer]: a cash movement. Two shapes exist in the sheet:
+///   the generated cash leg of a Buy/Sell (signed **Amount**: negative =
+///   cash out, positive = cash in), and a directly entered transfer — one
+///   row whose value lives in the **Price** column (Quantity/Amount blank).
 enum TransactionType {
   purchase,
   buy,
   sell,
   transfer;
 
-  /// The types the user can pick in the add-transaction form. [transfer] is
-  /// excluded — it only exists as the generated cash leg of a trade.
-  static const userSelectable = [purchase, buy, sell];
+  /// The types the user can pick in the add-transaction form.
+  static const userSelectable = [purchase, buy, sell, transfer];
 }
 
 extension TransactionTypeX on TransactionType {

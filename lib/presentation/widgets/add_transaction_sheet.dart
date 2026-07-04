@@ -103,25 +103,35 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
       }
     }
 
-    final tx = _type == TransactionType.purchase
-        ? SheetTransaction(
-            date: _date,
-            account: account,
-            type: _type,
-            category: _category,
-            description: _descCtrl.text.trim(),
-            amount: double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0,
-          )
-        : SheetTransaction(
-            date: _date,
-            account: account,
-            type: _type,
-            description: _descCtrl.text.trim(),
-            secondAccount: secondAccount,
-            ticker: _tickerCtrl.text.trim().toUpperCase(),
-            quantity: double.tryParse(_qtyCtrl.text.replaceAll(',', '')) ?? 0,
-            price: double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0,
-          );
+    final tx = switch (_type) {
+      TransactionType.purchase => SheetTransaction(
+          date: _date,
+          account: account,
+          type: _type,
+          category: _category,
+          description: _descCtrl.text.trim(),
+          amount: double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0,
+        ),
+      // User spec: a direct Transfer is one row whose value goes in the
+      // sheet's Price column — the entity carries it as `price`.
+      TransactionType.transfer => SheetTransaction(
+          date: _date,
+          account: account,
+          type: _type,
+          description: _descCtrl.text.trim(),
+          price: double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0,
+        ),
+      TransactionType.buy || TransactionType.sell => SheetTransaction(
+          date: _date,
+          account: account,
+          type: _type,
+          description: _descCtrl.text.trim(),
+          secondAccount: secondAccount,
+          ticker: _tickerCtrl.text.trim().toUpperCase(),
+          quantity: double.tryParse(_qtyCtrl.text.replaceAll(',', '')) ?? 0,
+          price: double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0,
+        ),
+    };
 
     setState(() => _saving = true);
     final result = await ref.read(sheetsRepositoryProvider).appendTransaction(tx);
@@ -193,6 +203,8 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
 
               if (_type == TransactionType.purchase)
                 ..._purchaseFields(isDark)
+              else if (_type == TransactionType.transfer)
+                ..._transferFields(isDark)
               else
                 ..._tradeFields(isDark),
 
@@ -282,6 +294,30 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         SheetTextField(
           ctrl: _descCtrl,
           hint: 'e.g. Lunch with team',
+          isDark: isDark,
+          textCapitalization: TextCapitalization.sentences,
+        ),
+      ];
+
+  // ── Transfer fields ──────────────────────────────────────────────────────
+
+  List<Widget> _transferFields(bool isDark) => [
+        FieldLabel(label: 'Amount', isDark: isDark),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _amountCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+          style: _inputStyle(isDark),
+          decoration: sheetInputDeco(isDark: isDark, hint: '0'),
+          validator: _positiveNumber,
+        ),
+        const SizedBox(height: 16),
+        FieldLabel(label: 'Description', isDark: isDark),
+        const SizedBox(height: 8),
+        SheetTextField(
+          ctrl: _descCtrl,
+          hint: 'e.g. Move to brokerage',
           isDark: isDark,
           textCapitalization: TextCapitalization.sentences,
         ),

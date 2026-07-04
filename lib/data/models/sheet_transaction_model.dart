@@ -82,9 +82,26 @@ abstract final class SheetTransactionModel {
   /// A Purchase produces exactly one `Expense` row whose Amount is stored
   /// **negative** (cash out) — the form passes the user's positive input and
   /// the sign is applied here. A Buy/Sell produces **two** rows — the cash
-  /// Transfer leg plus the trade leg — see [_tradeRows].
+  /// Transfer leg plus the trade leg — see [_tradeRows]. A directly entered
+  /// Transfer produces one row whose value lives in the **Price** column
+  /// (user spec) — Category, Symbol, Quantity and Amount stay blank.
   static List<List<dynamic>> toRows(SheetTransaction tx) {
     if (tx.type.isTrade) return _tradeRows(tx);
+    if (tx.type == TransactionType.transfer) {
+      return [
+        [
+          tx.date.toIso8601String(),
+          tx.account,
+          tx.type.sheetValue,
+          '', // category
+          tx.description,
+          '', // ticker
+          '', // quantity
+          tx.price ?? '',
+          '', // amount
+        ],
+      ];
+    }
     final isExpense = tx.type == TransactionType.purchase;
     return [
       [
