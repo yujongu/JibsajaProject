@@ -13,6 +13,9 @@ to it (Purchase / Buy / Sell). No Firebase, no live price/FX feeds.
 - **Rules**: Scoped rules in `.claude/rules/`
 
 ## 🛠️ Critical Dev Commands
+- **First-time setup**: `cp lib/core/config/app_config.template.dart lib/core/config/app_config.dart`,
+  then fill in `sheetsWebAppUrl` + `sheetsApiKey`. The file is gitignored — never commit real values.
+  ⚠️ An empty `sheetsWebAppUrl` disables Sheets sync *silently*.
 - **Build**: `flutter build apk`
 - **Tests**: `flutter test`
 - **Analyze**: `flutter analyze` (Run this after every major change)
@@ -33,6 +36,6 @@ to it (Purchase / Buy / Sell). No Firebase, no live price/FX feeds.
 ## 🔄 Persistence Protocol (Strict)
 Before ending a session, you MUST update `HANDOVER.md`. Do not ask for permission; simply perform the write. Use this exact structure:
 1. **Current Milestone**: High-level goal (e.g., "Auth Flow").
-2. **Context & Logic Decisions**: Why did we choose a specific Riverpod provider? What Firestore trade-offs were made?
+2. **Context & Logic Decisions**: Why did we choose a specific Riverpod provider? What Sheets/backend contract trade-offs were made?
 3. **The 'Gravel'**: List small, annoying bugs or half-finished refactors that aren't obvious from the code.
 4. **Next Immediate Step**: The very first command or file the next session should touch.

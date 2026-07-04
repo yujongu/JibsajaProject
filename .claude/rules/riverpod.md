@@ -11,7 +11,7 @@ files: "lib/presentation/**/*.dart, lib/providers/**/*.dart"
 ## 🛠️ Implementation Rules
 - **Naming**: Providers should be named `[feature]Provider` (e.g., `assetListProvider`).
 - **Async Data**: Always use `AsyncValue` to handle loading and error states. 
-- **Code Generation**: [Decide if you use @riverpod generator or manual. If using generator, add: "Always use the @riverpod annotation and run build_runner."]
+- **Code Generation**: Manual providers only (no `@riverpod` generator, no build_runner). Declare providers as top-level `final` variables.
 - **Immutability**: All state classes must be immutable (use `freezed` or `copyWith`).
 
 ## 🎨 UI Integration (Premium & Minimalist)
