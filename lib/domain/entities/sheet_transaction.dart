@@ -61,9 +61,9 @@ class SheetTransaction {
   final int rowIndex;
 
   /// Convenience for rows whose [amount] is not explicitly set: trades fall
-  /// back to quantity × price; a directly entered Transfer stores its value
-  /// in the Price column only (Quantity and Amount blank), so Price IS the
-  /// row's value.
+  /// back to quantity × price. Directly entered Transfers now store their
+  /// value in Amount; the Price fallback keeps **legacy** transfer rows
+  /// (written before 2026-07-04 with the value in the Price column) readable.
   double get computedAmount {
     if (amount != null) return amount!;
     if (type == TransactionType.transfer) return price ?? 0;

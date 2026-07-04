@@ -1,6 +1,65 @@
 # HANDOVER
 
 ## Current Milestone
+**Transfer value moved Price → Amount (2026-07-04, spec revision).** The
+user reversed the same-day "value in Price" spec: a directly entered
+Transfer now writes its value in the **Amount** column, as entered (no sign
+applied); Price stays blank. Analyzer clean, 41/41 tests. **Uncommitted.**
+
+### What shipped (Transfer column fix)
+- **Data** (`sheet_transaction_model.dart#toRows`): transfer branch writes
+  `tx.amount` at index 8, blank at index 7 (was the reverse).
+- **Form** (`add_transaction_sheet.dart`): the Transfer case maps the typed
+  value to the entity's `amount` field (was `price`).
+- **Negative Transfer amounts allowed (user request, same session)**: the
+  Transfer amount field now takes a signed value — formatter allows `-`,
+  keyboard is `signed: true`, and a new `_nonZeroNumber` validator replaces
+  `_positiveNumber` (rejects 0/empty/non-numeric, permits negatives). Value
+  is written to Amount **as entered**, so a minus means cash out. A hint line
+  under the field explains the sign. (Purchase/Buy/Sell still use
+  `_positiveNumber`.)
+- **Legacy read kept**: `SheetTransaction.computedAmount` still falls back to
+  Price for transfer rows with no Amount, so rows written under the earlier
+  same-day spec keep displaying correctly. New regression test covers this.
+- **Docs** (`docs/data/sheets.md`): Price/Amount column notes + direct
+  Transfer row-type section updated (legacy shape documented).
+- ⚠️ If any Price-column transfer rows exist in the live sheet, consider
+  moving those values to Amount by hand so the sheet's own formulas see them.
+
+## Previous Milestone
+**Account picker redesign (2026-07-04, earlier same day).** The stock Material
+`DropdownButtonFormField` in the add-transaction form is replaced with a
+custom bottom-sheet picker (Toss-style). Analyzer clean, 40/40 tests.
+**Uncommitted.**
+
+### What shipped (account picker)
+- **New**: `lib/presentation/widgets/account_picker_field.dart` —
+  `AccountPickerField` (trigger field, same filled/12px geometry as the other
+  inputs) + `_AccountPickerSheet` (modal bottom sheet) + `AccountMonogram`
+  (circular initial disc). Exports `newAccountSentinel` (moved out of
+  `add_transaction_sheet.dart`).
+- **Identity monograms**: each account gets a stable color from a 6-hue
+  cool-toned palette (`accountIdentityColor`, hash of the name). Red/amber
+  deliberately excluded — those are semantic (negative/warning) colors.
+- **MRU ordering + freshness captions**: `accountNamesProvider` (alphabetical
+  `List<String>`) replaced by `accountOptionsProvider` —
+  `List<AccountOption>` where `AccountOption = ({String name, DateTime
+  lastUsed})`, ordered most-recently-used first (rows arrive newest-first, so
+  first occurrence = MRU rank). Picker rows show "Used today / Used yesterday
+  / Last used Jun 12".
+- **Validation**: `AccountPickerField` wraps a `FormField<String>` with
+  `AutovalidateMode.onUserInteraction` — "Required" appears on save-validate
+  with a negative border, clears the moment a choice is made.
+- **"New account" flow REMOVED (user decision, same session)**: the app will
+  not offer creating accounts — accounts only ever come from the sheet. Gone:
+  `newAccountSentinel`, the picker's plus-disc action row, the inline
+  name field, `_resolveAccount` and the two `_new*AccountCtrl` controllers in
+  `add_transaction_sheet.dart` (`_accountSelector` inlined away — call sites
+  use `AccountPickerField` directly). An empty account list now shows a
+  "No accounts in the sheet yet" line in the picker. Both trade selectors get
+  titled sheets ("Brokerage cash account" / "Brokerage account").
+
+## Previous Milestone
 **Direct Transfer entry (2026-07-04, later same day).** Transfer is now a
 fourth option in the add-transaction form. **User spec**: writes ONE row —
 Date, Account, Type `Transfer`, Description, and the value in the **Price**
@@ -232,6 +291,9 @@ KPI (e.g. totalAssetsKrw ≈ ₩270.6M, returnRate ≈ +25.9%, 179 FX points).
 Bonus: the new deployment answers in ~2.6s vs the old ~13s.
 
 ## The 'Gravel'
+- **Account picker has no search field** — fine for a personal handful of
+  accounts; add a filter box in `_AccountPickerSheet` if the list ever grows
+  past a screenful (it caps at 60% screen height and scrolls).
 - **The freshness label only ticks per minute** and the empty-transactions
   state (`_EmptyState`) doesn't show it — both fine, just deliberate.
 - **Cache is unbounded**: the full transactions body is one prefs string; fine
@@ -262,10 +324,15 @@ Bonus: the new deployment answers in ~2.6s vs the old ~13s.
   prefers.
 
 ## Next Immediate Step
-1. **Verify Transfer on-device**: add a Transfer in the app, then check the
-   sheet row has the value in the Price column (and that the sheet's own
-   balance formulas treat it the way the user expects — the app is following
-   their spec verbatim). Already committed — on-device check still pending.
+1. **Verify the account picker on-device**: open Add Transaction → tap
+   Account → picker sheet should list accounts MRU-first with monograms;
+   pick one, and save-validate empty (inline "Required"). No New-account
+   option should appear anywhere. Then commit (`account_picker_field.dart`,
+   `add_transaction_sheet.dart`, `sheets_providers.dart`, `HANDOVER.md`).
+2. **Verify Transfer on-device**: add a Transfer in the app, then check the
+   sheet row has the value in the **Amount** column (spec revised — was
+   Price) and that the sheet's own balance formulas pick it up. Also decide
+   whether to hand-migrate any old Price-column transfer rows.
 2. **Verify on-device that the startup error is gone**: fresh install (or
    clear app data) + launch → should shimmer, retry silently if the first
    fetch hiccups, and only error if the network is truly down. Then relaunch —

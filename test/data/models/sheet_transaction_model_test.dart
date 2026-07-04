@@ -161,13 +161,13 @@ void main() {
       expect(row[8], -12.5); // expenses store a negative Amount (cash out)
     });
 
-    test('direct transfer produces one row with the value in Price only', () {
+    test('direct transfer produces one row with the value in Amount only', () {
       final rows = SheetTransactionModel.toRows(SheetTransaction(
         date: DateTime(2026, 7, 4),
         account: 'Toss',
         type: TransactionType.transfer,
         description: 'Move to brokerage',
-        price: 500000,
+        amount: 500000,
       ));
 
       expect(rows, hasLength(1));
@@ -180,8 +180,8 @@ void main() {
       expect(row[4], 'Move to brokerage');
       expect(row[5], ''); // symbol
       expect(row[6], ''); // quantity
-      expect(row[7], 500000); // user spec: the transfer value lives in Price
-      expect(row[8], ''); // amount stays blank
+      expect(row[7], ''); // price stays blank
+      expect(row[8], 500000); // the transfer value lives in Amount, as entered
     });
 
     test('buy produces a Transfer cash leg then the Buy trade leg', () {
@@ -279,7 +279,24 @@ void main() {
       expect(tx.computedAmount, -1500);
     });
 
-    test('read-back direct transfer takes its value from Price', () {
+    test('read-back direct transfer takes its value from Amount', () {
+      final tx = SheetTransactionModel.fromJson({
+        'Date': '2026-07-04T00:00:00.000',
+        'Account': 'Toss',
+        'Type': 'Transfer',
+        'Description': 'Move to brokerage',
+        'Symbol': '',
+        'Quantity': '',
+        'Price': '',
+        'Amount': 500000,
+      });
+
+      expect(tx.type, TransactionType.transfer);
+      expect(tx.computedAmount, 500000);
+    });
+
+    test('legacy direct transfer (value in Price, Amount blank) still reads',
+        () {
       final tx = SheetTransactionModel.fromJson({
         'Date': '2026-07-04T00:00:00.000',
         'Account': 'Toss',

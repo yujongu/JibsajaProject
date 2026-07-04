@@ -121,14 +121,24 @@ final transactionsByMonthProvider = Provider<List<MonthGroup>>((ref) {
   return txs.groupByMonth();
 });
 
-/// Distinct account names seen in the sheet, for the add-row dropdown.
-/// Empty while loading or on error — the form still allows free-text entry.
-final accountNamesProvider = Provider<List<String>>((ref) {
+/// One choice in the add-row account picker.
+typedef AccountOption = ({String name, DateTime lastUsed});
+
+/// Distinct account names seen in the sheet with the date each was last used,
+/// ordered most-recently-used first so the picker surfaces likely choices at
+/// the top. Empty while loading or on error — the form still allows free-text
+/// entry via "New account".
+final accountOptionsProvider = Provider<List<AccountOption>>((ref) {
   final txs = ref.watch(transactionsProvider).valueOrNull ?? const [];
-  final names = <String>{
-    for (final t in txs)
-      if (t.account.trim().isNotEmpty) t.account.trim(),
-  }.toList()
-    ..sort();
-  return names;
+  // Rows arrive newest-first, so the first occurrence of a name is both its
+  // most recent use and its MRU rank.
+  final lastUsed = <String, DateTime>{};
+  for (final t in txs) {
+    final name = t.account.trim();
+    if (name.isEmpty) continue;
+    lastUsed.putIfAbsent(name, () => t.date);
+  }
+  return [
+    for (final e in lastUsed.entries) (name: e.key, lastUsed: e.value),
+  ];
 });

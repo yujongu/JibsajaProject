@@ -83,8 +83,8 @@ abstract final class SheetTransactionModel {
   /// **negative** (cash out) — the form passes the user's positive input and
   /// the sign is applied here. A Buy/Sell produces **two** rows — the cash
   /// Transfer leg plus the trade leg — see [_tradeRows]. A directly entered
-  /// Transfer produces one row whose value lives in the **Price** column
-  /// (user spec) — Category, Symbol, Quantity and Amount stay blank.
+  /// Transfer produces one row whose value lives in the **Amount** column,
+  /// written as entered — Category, Symbol, Quantity and Price stay blank.
   static List<List<dynamic>> toRows(SheetTransaction tx) {
     if (tx.type.isTrade) return _tradeRows(tx);
     if (tx.type == TransactionType.transfer) {
@@ -97,8 +97,8 @@ abstract final class SheetTransactionModel {
           tx.description,
           '', // ticker
           '', // quantity
-          tx.price ?? '',
-          '', // amount
+          '', // price
+          tx.amount ?? '',
         ],
       ];
     }
