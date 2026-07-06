@@ -1,6 +1,93 @@
 # HANDOVER
 
 ## Current Milestone
+**Runtime sheet switcher + local API audit log (2026-07-06).** Two new
+features, implemented via the orchestrator→Flutter-dev(Fable 5)→review(Opus)
+loop. `flutter analyze` clean, **73/73 tests**. **Uncommitted.** Release APK
+built at the end of the session.
+
+### Feature 1 — switch between sheets at runtime (two fixed slots)
+Sheet config is no longer the compile-time `AppConfig` const; it is a runtime
+**profile** the repository reads per call. Two fixed slots: **Test** (seeded
+from `AppConfig` on first run) and **Real** (starts empty — user pastes the
+copied spreadsheet's own `/exec` URL + API key in-app).
+- **Domain**: `entities/sheet_profile.dart` — `SheetProfile {id,name,webAppUrl,
+  apiKey}` + `isConfigured`; `testId`/`realId` consts.
+- **Data**: `datasources/sheet_profile_store.dart` (prefs slots + active id;
+  seeds Test from `AppConfig`, **re-seeds** if the stored Test URL is
+  empty/null and config is now non-empty). `SheetsRepositoryImpl` **no longer
+  reads `AppConfig` statically** — endpoint injected via `webAppUrl`/`apiKey`
+  ctor params. `SheetsLocalCache` keys now **namespaced by `profileId`**
+  (`cache.transactions.body.{id}.v1`) + an `evict(profileId)` method.
+- **Presentation**: `providers/preferences_providers.dart` (holds
+  `sharedPreferencesProvider`, moved out of `sheets_providers.dart` to break an
+  import cycle; re-exported so `main.dart` is untouched);
+  `providers/sheet_profile_providers.dart` — `SheetProfilesNotifier`
+  (`switchTo`, `updateProfile`) + `activeSheetProfileProvider`.
+  `sheetsRepositoryProvider` now rebuilds from the active profile → the stream
+  data providers refetch and the namespaced cache shows the right sheet
+  instantly. `updateProfile` **evicts that slot's cache when its URL changes**
+  (key-only edits keep the cache). UI: `pages/settings/settings_page.dart`
+  (two slot cards, switch-on-tap, edit sheet with masked key + reveal, links to
+  History); entry point is a **gear icon in the Dashboard AppBar** (no third
+  nav tab).
+
+### Feature 2 — local API audit log (mutations only, NOT reads)
+Every sheet-mutating call is recorded on-device so app actions can be
+reconciled against the sheet on a mismatch. Cap **500 newest** entries.
+- **Domain**: `entities/api_call_record.dart` — `ApiCallRecord` + `ApiOperation`
+  enum (`append`/`update`/`delete`; only append is emitted today).
+  `repositories/i_audit_log.dart` — `IAuditLog {records(), clear(),
+  exportJson()}` (presentation goes through this, not the datasource).
+- **Data**: `models/api_call_record_model.dart` (JSON), `datasources/
+  audit_log_store.dart` (`implements IAuditLog`, key `audit.log.v1`,
+  newest-first, 500-cap tail-trim, corrupt JSON → empty).
+  `repositories/logging_sheets_repository.dart` — decorator over
+  `ISheetsRepository`; logs **appends only** (rows via `toRows`, a clean
+  summary, success/detail, httpStatus parsed from "Sheet returned NNN"); reads
+  pass through unlogged; a throwing store never breaks the append.
+- **Presentation**: `providers/audit_log_providers.dart` (`auditLogProvider`
+  typed as `IAuditLog`, `auditLogRecordsProvider` autoDispose so each visit
+  re-reads); `pages/history/history_page.dart` — newest-first list, tap →
+  detail with the exact row payloads, **Copy** (pretty JSON → clipboard) +
+  **Clear** (confirm) AppBar actions.
+
+### Decisions
+- **Two fixed slots, not a general manager** (user choice). Each slot's URL+key
+  is editable in-app; the Real slot is the migration target.
+- **Cache namespaced by slot id, and evicted on URL change** — prevents the old
+  sheet's rows flashing after a switch or after re-pointing a slot.
+- **Log via a decorator**, not inside the impl — keeps `SheetsRepositoryImpl`
+  clean and reads unlogged by construction. Mutations-only (reads are noisy
+  polls) per user.
+- **No new pub deps** — storage on `shared_preferences`, export via
+  `Clipboard`.
+
+### The 'Gravel' (this session)
+- **Real slot is empty until the user pastes its `/exec` URL + key** in
+  Settings → Real → Edit. An unconfigured active slot returns the existing
+  "not configured" Failure (no crash, no stale Test data).
+- **Cache/audit are keyed by slot id, not by URL.** Eviction-on-URL-change
+  covers the edit path; the audit log itself is not profile-namespaced (records
+  carry `sheetName`) — intentional.
+- **`update`/`delete` exist in `ApiOperation` but nothing emits them** (the app
+  only appends today).
+- Existing installs lose their one cached response on first launch after this
+  update (cache keys changed) — refetches immediately, harmless.
+- **Uncommitted**: all the new files above + edits to
+  `sheets_repository_impl.dart`, `sheets_local_cache.dart`,
+  `sheets_providers.dart`, `dashboard_page.dart`, and several test files.
+
+### Next Immediate Step
+1. **On-device**: open Dashboard → gear → Settings. Edit the **Real** slot
+   (paste the copied sheet's `/exec` URL + API key), tap it to switch, confirm
+   the Dashboard/Transactions refetch to the real sheet. Flip back to Test.
+2. Add a transaction, then Settings → API call history → confirm the append
+   (rows + summary + ✓) is logged; force a failure (bad URL) and confirm it
+   logs ✗ with the error detail. Try Copy and Clear.
+3. Commit this session's work (no Claude co-author trailer, per standing pref).
+
+## Previous Milestone
 **Transfer value moved Price → Amount (2026-07-04, spec revision).** The
 user reversed the same-day "value in Price" spec: a directly entered
 Transfer now writes its value in the **Amount** column, as entered (no sign

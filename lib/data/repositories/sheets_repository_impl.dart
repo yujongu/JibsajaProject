@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import '../../core/config/app_config.dart';
 import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/result.dart';
 import '../../domain/entities/sheet_transaction.dart';
@@ -16,7 +15,20 @@ import '../models/sheet_transaction_model.dart';
 /// - GET  → returns all transaction rows as JSON.
 /// - POST → appends row(s) for a new transaction.
 class SheetsRepositoryImpl implements ISheetsRepository {
-  const SheetsRepositoryImpl({this.client, this.cache});
+  const SheetsRepositoryImpl({
+    required this.webAppUrl,
+    this.apiKey = '',
+    this.client,
+    this.cache,
+  });
+
+  /// The Apps Script web app `/exec` URL to talk to. Injected (from the
+  /// active [SheetProfile]) so the sheet can be switched at runtime; an
+  /// empty value keeps the "not configured" Failure behavior.
+  final String webAppUrl;
+
+  /// Shared secret sent with each request; may be empty.
+  final String apiKey;
 
   /// Injectable for tests; defaults to a one-shot [http.Client] per call.
   final http.Client? client;
@@ -66,15 +78,15 @@ class SheetsRepositoryImpl implements ISheetsRepository {
 
   @override
   Future<Result<List<SheetTransaction>>> fetchTransactions() async {
-    if (AppConfig.sheetsWebAppUrl.isEmpty) {
-      return const Failure('Google Sheet is not configured. Set '
-          'AppConfig.sheetsWebAppUrl in lib/core/config/app_config.dart.');
+    if (webAppUrl.isEmpty) {
+      return const Failure(
+          'Google Sheet is not configured. Set the sheet URL in Settings.');
     }
 
     try {
-      final uri = Uri.parse(AppConfig.sheetsWebAppUrl).replace(
+      final uri = Uri.parse(webAppUrl).replace(
         queryParameters: {
-          if (AppConfig.sheetsApiKey.isNotEmpty) 'apiKey': AppConfig.sheetsApiKey,
+          if (apiKey.isNotEmpty) 'apiKey': apiKey,
         },
       );
       final resp = await _get(uri);
@@ -135,16 +147,16 @@ class SheetsRepositoryImpl implements ISheetsRepository {
 
   @override
   Future<Result<DashboardSummary>> fetchDashboard() async {
-    if (AppConfig.sheetsWebAppUrl.isEmpty) {
-      return const Failure('Google Sheet is not configured. Set '
-          'AppConfig.sheetsWebAppUrl in lib/core/config/app_config.dart.');
+    if (webAppUrl.isEmpty) {
+      return const Failure(
+          'Google Sheet is not configured. Set the sheet URL in Settings.');
     }
 
     try {
-      final uri = Uri.parse(AppConfig.sheetsWebAppUrl).replace(
+      final uri = Uri.parse(webAppUrl).replace(
         queryParameters: {
           'sheet': DashboardSummaryModel.sheetName,
-          if (AppConfig.sheetsApiKey.isNotEmpty) 'apiKey': AppConfig.sheetsApiKey,
+          if (apiKey.isNotEmpty) 'apiKey': apiKey,
         },
       );
       final resp = await _get(uri);
@@ -221,7 +233,7 @@ class SheetsRepositoryImpl implements ISheetsRepository {
 
   @override
   Future<Result<void>> appendTransaction(SheetTransaction tx) async {
-    if (AppConfig.sheetsWebAppUrl.isEmpty) {
+    if (webAppUrl.isEmpty) {
       return const Failure('Google Sheet is not configured.');
     }
 
@@ -229,12 +241,12 @@ class SheetsRepositoryImpl implements ISheetsRepository {
     try {
       final body = <String, dynamic>{
         'rows': SheetTransactionModel.toRows(tx),
-        if (AppConfig.sheetsApiKey.isNotEmpty) 'apiKey': AppConfig.sheetsApiKey,
+        if (apiKey.isNotEmpty) 'apiKey': apiKey,
       };
 
       final resp = await c
           .post(
-            Uri.parse(AppConfig.sheetsWebAppUrl),
+            Uri.parse(webAppUrl),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(body),
           )

@@ -1,28 +1,38 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/datasources/sheets_local_cache.dart';
+import '../../data/repositories/logging_sheets_repository.dart';
 import '../../data/repositories/sheets_repository_impl.dart';
 import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/result.dart';
 import '../../domain/entities/sheet_transaction.dart';
 import '../../domain/entities/transaction_summary.dart';
 import '../../domain/repositories/i_sheets_repository.dart';
+import 'audit_log_providers.dart';
+import 'preferences_providers.dart';
+import 'sheet_profile_providers.dart';
 
-/// Initialized in `main()` before `runApp` and injected via override, so
-/// cached sheet data is readable synchronously from the first frame.
-final sharedPreferencesProvider = Provider<SharedPreferences>(
-  (_) => throw UnimplementedError(
-      'sharedPreferencesProvider must be overridden in main()'),
-);
+export 'preferences_providers.dart' show sharedPreferencesProvider;
 
-/// Single data boundary for the whole app.
-final sheetsRepositoryProvider = Provider<ISheetsRepository>(
-  (ref) => SheetsRepositoryImpl(
-    cache: SheetsLocalCache(ref.watch(sharedPreferencesProvider)),
-  ),
-);
+/// Single data boundary for the whole app, built against the **active**
+/// sheet profile. Switching the profile rebuilds this provider, and because
+/// [transactionsProvider] / [dashboardProvider] watch it, they refetch
+/// against the new sheet automatically. Wrapped in [LoggingSheetsRepository]
+/// so every mutation lands in the local audit log.
+final sheetsRepositoryProvider = Provider<ISheetsRepository>((ref) {
+  final active = ref.watch(activeSheetProfileProvider);
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return LoggingSheetsRepository(
+    delegate: SheetsRepositoryImpl(
+      webAppUrl: active.webAppUrl,
+      apiKey: active.apiKey,
+      cache: SheetsLocalCache(prefs, profileId: active.id),
+    ),
+    auditLog: ref.watch(auditLogStoreProvider),
+    sheetName: active.name,
+  );
+});
 
 /// How often a no-cache cold start re-attempts a failed fetch before giving
 /// up, and the pause between attempts. Cold boots hit transient failures

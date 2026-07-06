@@ -7,15 +7,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Stores the untouched response bodies — parsing stays in one place
 /// (`SheetsRepositoryImpl`), and a schema change invalidates gracefully
 /// because a body that no longer parses is simply treated as no cache.
+///
+/// Keys are namespaced by [profileId] ('test' / 'real') so each sheet keeps
+/// its own cache — switching the active sheet instantly shows that sheet's
+/// last data with no cross-contamination.
 class SheetsLocalCache {
-  const SheetsLocalCache(this._prefs);
+  const SheetsLocalCache(this._prefs, {required this.profileId});
 
   final SharedPreferences _prefs;
 
-  static const _transactionsKey = 'cache.transactions.body.v1';
-  static const _transactionsAtKey = 'cache.transactions.at.v1';
-  static const _dashboardKey = 'cache.dashboard.body.v1';
-  static const _dashboardAtKey = 'cache.dashboard.at.v1';
+  /// The sheet profile these cached bodies belong to.
+  final String profileId;
+
+  String get _transactionsKey => 'cache.transactions.body.$profileId.v1';
+  String get _transactionsAtKey => 'cache.transactions.at.$profileId.v1';
+  String get _dashboardKey => 'cache.dashboard.body.$profileId.v1';
+  String get _dashboardAtKey => 'cache.dashboard.at.$profileId.v1';
 
   String? readTransactions() => _prefs.getString(_transactionsKey);
 
@@ -37,6 +44,16 @@ class SheetsLocalCache {
 
   /// When [writeDashboard] last ran. Null when nothing is cached.
   DateTime? dashboardTimestamp() => _readAt(_dashboardAtKey);
+
+  /// Drops every cached body + timestamp for this profile. Call when the
+  /// slot is re-pointed at a different sheet URL, so the previous sheet's
+  /// rows/dashboard don't flash on the next load before the live refetch.
+  void evict() {
+    _prefs.remove(_transactionsKey);
+    _prefs.remove(_transactionsAtKey);
+    _prefs.remove(_dashboardKey);
+    _prefs.remove(_dashboardAtKey);
+  }
 
   DateTime? _readAt(String key) {
     final ms = _prefs.getInt(key);

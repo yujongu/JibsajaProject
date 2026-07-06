@@ -8,6 +8,7 @@ import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/error_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
 import '../../shared/widgets/updated_at_label.dart';
+import '../settings/settings_page.dart';
 import 'fx_sparkline.dart';
 
 String _krw(double v) => '₩${NumberFormat('#,##0', 'en_US').format(v)}';
@@ -37,6 +38,13 @@ class DashboardPage extends ConsumerWidget {
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Refresh',
             onPressed: () => ref.invalidate(dashboardProvider),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_rounded),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
+            ),
           ),
         ],
         body: RefreshIndicator(
