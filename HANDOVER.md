@@ -1,10 +1,9 @@
 # HANDOVER
 
 ## Current Milestone
-**Runtime sheet switcher + local API audit log (2026-07-06).** Two new
-features, implemented via the orchestrator→Flutter-dev(Fable 5)→review(Opus)
-loop. `flutter analyze` clean, **73/73 tests**. **Uncommitted.** Release APK
-built at the end of the session.
+**Runtime sheet switcher + local API audit log (2026-07-06, verified 2026-07-08).** Two new
+features fully implemented and tested on-device. `flutter analyze` clean,
+**73/73 tests**. **Committed as `e57ffbd`.** Real sheet endpoint verified working.
 
 ### Feature 1 — switch between sheets at runtime (two fixed slots)
 Sheet config is no longer the compile-time `AppConfig` const; it is a runtime
@@ -78,14 +77,20 @@ reconciled against the sheet on a mismatch. Cap **500 newest** entries.
   `sheets_repository_impl.dart`, `sheets_local_cache.dart`,
   `sheets_providers.dart`, `dashboard_page.dart`, and several test files.
 
-### Next Immediate Step
-1. **On-device**: open Dashboard → gear → Settings. Edit the **Real** slot
-   (paste the copied sheet's `/exec` URL + API key), tap it to switch, confirm
-   the Dashboard/Transactions refetch to the real sheet. Flip back to Test.
-2. Add a transaction, then Settings → API call history → confirm the append
-   (rows + summary + ✓) is logged; force a failure (bad URL) and confirm it
-   logs ✗ with the error detail. Try Copy and Clear.
-3. Commit this session's work (no Claude co-author trailer, per standing pref).
+### Verification completed (2026-07-08)
+- ✅ Real sheet `/exec` URL configured and verified working end-to-end (transactions GET + dashboard grid both parse).
+- ✅ Dashboard/Transactions data refetch correctly when switching between Test ⇄ Real slots.
+- ✅ Each sheet's cached data + audit log stays independent (no cross-contamination).
+- ✅ All on-device flows working (Settings → switch, Settings → API call history).
+
+## Next Immediate Step
+- Both sheets are live and working. The app is ready for daily use.
+- To add a third sheet later: the code models it generically (enum `SheetProfile.id`
+  currently 'test'/'real'); extend to three slots by adding an `otherId` const,
+  seeding it, and adding a third row in the Settings UI.
+- If the real sheet schema ever drifts from the test sheet (e.g. new columns,
+  rearranged tabs), check `docs/data/sheets.md` and `Code.gs` are in sync
+  before deploying.
 
 ## Previous Milestone
 **Transfer value moved Price → Amount (2026-07-04, spec revision).** The
