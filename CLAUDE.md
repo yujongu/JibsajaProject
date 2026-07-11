@@ -3,7 +3,8 @@
 ## 🎯 Project Vision & Context
 **What is this?**: A Flutter mobile app that is a thin client for a Google Sheet.
 It does exactly two things: **view** the transactions in the sheet, and **add rows**
-to it (Purchase / Buy / Sell). No Firebase, no live price/FX feeds.
+to it (Purchase / Buy / Sell). No Firebase, no live price/FX feeds
+(`firebase.json`/`firestore.rules` are unused leftovers from an earlier scaffold — ignore/remove them).
 **Target Audience**: People who track assets/expenses in a Google Sheet dashboard.
 **Core Philosophy**: The UI should feel "Premium and Minimalist." Speed of data entry is more important than flashy animations.
 
@@ -27,15 +28,12 @@ to it (Purchase / Buy / Sell). No Firebase, no live price/FX feeds.
   - Never use `Map<String, dynamic>` directly in the UI.
   - ALWAYS map JSON to/from the `SheetTransaction` entity via `SheetTransactionModel`.
   - Refer to `docs/data/sheets.md` before changing the column layout or backend contract.
+  - The sheet endpoint is **not** fixed by `app_config.dart` alone: it only seeds
+    the "Test" profile on first run. Both "Test"/"Real" slots + the active one
+    live in `SheetProfileStore` (SharedPreferences) and are edited at runtime
+    via Settings — see `sheet_profile_providers.dart`.
 - **Error Handling**: Use `Result` types (Success/Failure — `lib/domain/entities/result.dart`)
   for all Google Sheets calls.
 
 ## ⌨️ Shortcuts
 - When I say `!bye`, it means: "Check for lint errors, update HANDOVER.md, and summarize next steps."
-
-## 🔄 Persistence Protocol (Strict)
-Before ending a session, you MUST update `HANDOVER.md`. Do not ask for permission; simply perform the write. Use this exact structure:
-1. **Current Milestone**: High-level goal (e.g., "Auth Flow").
-2. **Context & Logic Decisions**: Why did we choose a specific Riverpod provider? What Sheets/backend contract trade-offs were made?
-3. **The 'Gravel'**: List small, annoying bugs or half-finished refactors that aren't obvious from the code.
-4. **Next Immediate Step**: The very first command or file the next session should touch.
