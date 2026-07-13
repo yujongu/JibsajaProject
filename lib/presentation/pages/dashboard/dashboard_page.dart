@@ -33,6 +33,7 @@ class DashboardPage extends ConsumerWidget {
     return GradientBackground(
       child: FeatureScaffold(
         title: 'Dashboard',
+        loading: ref.watch(isFetchingProvider('dashboardProvider')),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),

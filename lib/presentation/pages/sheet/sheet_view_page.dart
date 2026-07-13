@@ -29,6 +29,7 @@ class SheetViewPage extends ConsumerWidget {
     return GradientBackground(
       child: FeatureScaffold(
         title: 'Transactions',
+        loading: ref.watch(isFetchingProvider('transactionsProvider')),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),

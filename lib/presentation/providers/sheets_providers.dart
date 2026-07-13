@@ -34,6 +34,25 @@ final sheetsRepositoryProvider = Provider<ISheetsRepository>((ref) {
   );
 });
 
+/// Labels of sheet fetches currently hitting the network. Lets the UI show a
+/// "syncing" bar even while stale cached data stays on screen: the cache-first
+/// stream below emits the cached value before the live fetch returns, so
+/// `AsyncValue.isLoading` is already false during that window.
+class FetchStatusNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => const {};
+  void start(String label) => state = {...state, label};
+  void stop(String label) => state = {...state}..remove(label);
+}
+
+final fetchStatusProvider =
+    NotifierProvider<FetchStatusNotifier, Set<String>>(FetchStatusNotifier.new);
+
+/// Whether a live fetch for [label] is currently in flight.
+final isFetchingProvider = Provider.family<bool, String>(
+  (ref, label) => ref.watch(fetchStatusProvider).contains(label),
+);
+
 /// How often a no-cache cold start re-attempts a failed fetch before giving
 /// up, and the pause between attempts. Cold boots hit transient failures
 /// (network stack warming up, Apps Script rejecting concurrent bursts), so
@@ -47,14 +66,24 @@ const _coldStartRetryDelay = Duration(seconds: 2);
 /// - a failed refresh keeps the cached value on screen (error only logged);
 /// - with no cache, transient failures are retried before the error surfaces.
 Stream<T> _cachedThenLive<T>({
+  required Ref ref,
   required T? cached,
   required Future<Result<T>> Function() fetch,
   required String label,
 }) async* {
   if (cached != null) yield cached;
 
+  final status = ref.read(fetchStatusProvider.notifier);
   for (var attempt = 1; attempt <= _coldStartAttempts; attempt++) {
-    final result = await fetch();
+    status.start(label);
+    final Result<T> result;
+    try {
+      result = await fetch();
+    } finally {
+      // Clears the label on success, failure, and stream cancellation
+      // (invalidate/dispose) alike, so the syncing bar never sticks on.
+      status.stop(label);
+    }
     switch (result) {
       case Success(:final value):
         yield value;
@@ -81,6 +110,7 @@ final transactionsProvider =
     StreamProvider<List<SheetTransaction>>((ref) {
   final repo = ref.watch(sheetsRepositoryProvider);
   return _cachedThenLive(
+    ref: ref,
     cached: repo.cachedTransactions(),
     fetch: repo.fetchTransactions,
     label: 'transactionsProvider',
@@ -94,6 +124,7 @@ final transactionsProvider =
 final dashboardProvider = StreamProvider<DashboardSummary>((ref) {
   final repo = ref.watch(sheetsRepositoryProvider);
   return _cachedThenLive(
+    ref: ref,
     cached: repo.cachedDashboard(),
     fetch: repo.fetchDashboard,
     label: 'dashboardProvider',
