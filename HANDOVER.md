@@ -1,8 +1,96 @@
 # HANDOVER
 
 ## Current Milestone
+**Month selector on the Transactions page (2026-07-30).** Analyzer clean,
+**87/87 tests**, release APK built. Committed to `main`.
+**Not verified on-device yet.**
+
+The page showed *all* rows grouped by month with a summary card hardcoded to the
+current month, so past months' spending/net-invested/category breakdown were
+unreachable. It now shows **one month at a time** with ◀ / ▶ arrows, defaulting
+to the current month.
+
+### Context & Decisions
+- **No backend change, and none was needed.** `fetchTransactions()` already GETs
+  the entire sheet in one request and caches the raw body, so every month was
+  already in memory. Month filtering is pure client-side work — `Code.gs` was not
+  touched and needs no redeploy.
+- The domain helper already took parameters: `TransactionAggregates.inMonth(year,
+  month)`. The only thing hardcoding "now" was the provider. Nothing was added to
+  the domain layer for this feature.
+- **Arrows live outside the animated region** (`_MonthBar`, static, above the
+  card). A control that slid away with the content it drives would be untappable
+  mid-flight. This is why the month label moved out of the summary card and into
+  the bar — the card's old `'This month'` / `'June 2026'` header row is gone.
+- **Slide without a new dependency**: `AnimatedSwitcher` + a `transitionBuilder`
+  that tests each child's key against the current month. This is the non-obvious
+  bit — `AnimatedSwitcher` runs the *outgoing* child's animation in reverse, so a
+  single tween sends both children the same way; the key test is what makes
+  incoming enter from one side while outgoing leaves the other. Reproduces
+  `SharedAxisTransition` without pulling in the `animations` package.
+- **`PageView` was rejected**: it forces every page to the viewport height, which
+  fights the card's variable height (0–5 category bars).
+- Nav is **clamped to the data range** (oldest row month → current month), so the
+  arrows can't walk forever into empty months.
+
+### What shipped
+- **Presentation** (`sheets_providers.dart`): `SelectedMonthNotifier` +
+  `selectedMonthProvider` (a `DateTime` normalized to the 1st; `DateTime(y, m+n)`
+  handles year rollover, so there is no manual month arithmetic anywhere).
+  `monthBoundsProvider` (`MonthRange` record), `monthNavProvider` (the two arrow
+  enabled-flags), `selectedMonthSummaryProvider`,
+  `selectedMonthTransactionsProvider`.
+  **Removed**: `currentMonthSummaryProvider`, `transactionsByMonthProvider`.
+- **Presentation** (`sheet_view_page.dart`): new `_MonthBar`, `_MonthSection`
+  (the animated part), `_MonthEmptyNotice`. `_MonthHeader` removed — redundant
+  with one month on screen. `_SummaryHeader` lost its header row and gained a
+  `super.key` (the `AnimatedSwitcher` needs to key it).
+- **Presentation** (`add_transaction_sheet.dart`): on a successful append, also
+  `selectedMonthProvider.notifier.select(tx.date)` — otherwise adding a
+  today-dated row while viewing a past month looks like nothing happened.
+- **Tests**: 9 new in `test/presentation/providers/sheets_providers_test.dart`
+  (year-boundary shifts both ways, bounds, both arrow limits, gap month, past-month
+  aggregates). The existing `_tx` helper gained optional `date`/`amount` params.
+
+### The 'Gravel' (this session)
+- **`groupByMonth()` + the `MonthGroup` entity are now dead code**
+  (`transaction_summary.dart:53-71, 173-193`). Their only caller was the deleted
+  `transactionsByMonthProvider`. Left in place deliberately — pure, tested
+  (`transaction_summary_test.dart:54`), zero runtime cost — but nothing calls them.
+  Delete them and their test if you want the domain layer tidy.
+- **`_MonthSection` derives slide direction by comparing keys across builds**
+  (`_lastKey`), not via `ref.listen`. Deliberate: it does not depend on Riverpod's
+  notification ordering. It assigns fields in `build` but calls no `setState`, so
+  it is safe — don't "fix" it into a listener without checking the direction is
+  still right on the first tap after a data refresh.
+- **No explicit `ClipRect` around the sliding card.** The `ListView` viewport
+  provides the hard edge; clipping to the card's own bounds would chop its
+  light-mode shadow (`blurRadius: 20`). The card *is* meant to overflow into the
+  16px page margin during transit.
+- `_kSlideExtent = 0.2` is a fraction of the card's width, not pixels. Tune there
+  if the motion feels wrong on a real device.
+- **Swipe gestures were not added** — arrows only, as specified. The sliding
+  motion does rather invite a horizontal drag, so expect to want it.
+- Pre-existing, untouched: the Gradle KGP deprecation warnings on every APK build
+  (`shared_preferences_android`), and the two duplicate `_typeColor` functions
+  noted in the previous milestone.
+
+## Next Immediate Step
+- Install the built APK (`build/app/outputs/flutter-apk/app-release.apk`) and
+  check on-device: opens on the current month; ◀ slides the card in from the left
+  and ▶ from the right, with the rows below cross-fading; both arrows grey out at
+  their ends; a month with no rows shows "No transactions in …" **and keeps the
+  arrows usable**; card height animates smoothly between months with different
+  category counts; adding a row while viewing a past month jumps to that row's
+  month.
+- Still outstanding from the previous milestone (**not yet done**): confirm
+  Deposit rows render green with a downward arrow and that the spending total is
+  higher than it used to be. That code shipped in `27c8ce6`; only the on-device
+  check is left.
+
+## Previous Milestone
 **Deposit rows no longer render as "Purchase" (2026-07-30).** Analyzer clean,
-**78/78 tests**. Uncommitted.
+**78/78 tests**. **Committed as `27c8ce6`.**
 
 ### The bug
 `TransactionTypeX.fromSheet` used `default: return purchase`, so *every*
@@ -33,7 +121,7 @@ bucket. The summary header was understating spending.
   (`textTertiaryLight`) + `help_outline`. Badge is `tx.rawType ?? tx.type.label`.
 - **Docs**: `docs/data/sheets.md` Type column + two new "Row types" bullets.
 
-### The 'Gravel' (this session)
+### The 'Gravel'
 - ⚠️ **The title switch in `_TransactionTile` ends in a `_ =>` wildcard**
   (`sheet_view_page.dart:361`), so it does **not** fail to compile when a
   `TransactionType` member is added — new members silently fall into
@@ -51,8 +139,8 @@ bucket. The summary header was understating spending.
   `{'type': 'wat'}` now expects `unknown`, not `purchase`.
 - **Not verified on-device yet** — see Next Immediate Step.
 
-## Next Immediate Step
-- `flutter build apk`, install, open Transactions and confirm against the real
+### Next Steps (carried over — still not verified on-device)
+- Install, open Transactions and confirm against the real
   sheet: Deposit rows are green **DEPOSIT** with a downward arrow and a positive
   amount; the summary header's spending total is now **higher** (Deposits stopped
   subtracting); Expense rows still read "Purchase"; the add form still shows four

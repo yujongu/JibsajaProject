@@ -146,20 +146,86 @@ final dashboardUpdatedAtProvider = Provider<DateTime?>((ref) {
   return ref.watch(sheetsRepositoryProvider).cachedDashboardAt();
 });
 
-/// Current-month aggregates (spending, net invested, spend by category) for
-/// the summary header, derived from the loaded rows. Yields zero totals while
-/// loading / on error.
-final currentMonthSummaryProvider = Provider<TransactionSummary>((ref) {
+/// The calendar month the Transactions page is showing, normalized to the 1st
+/// with no time component. Starts on the current month every launch (not
+/// persisted — reopening the app should land on "now").
+class SelectedMonthNotifier extends Notifier<DateTime> {
+  @override
+  DateTime build() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month);
+  }
+
+  /// Step [months] forward (positive) or back (negative). `DateTime` normalizes
+  /// out-of-range months, so month 0 → December of the previous year and month
+  /// 13 → January of the next; no manual year arithmetic needed.
+  void shift(int months) => state = DateTime(state.year, state.month + months);
+
+  /// Jump to the month containing [date].
+  void select(DateTime date) => state = DateTime(date.year, date.month);
+}
+
+final selectedMonthProvider =
+    NotifierProvider<SelectedMonthNotifier, DateTime>(
+        SelectedMonthNotifier.new);
+
+/// Inclusive range of months the month bar may navigate to.
+typedef MonthRange = ({DateTime oldest, DateTime newest});
+
+/// Oldest → newest navigable month, so the arrows can stop at the edges of the
+/// data instead of walking forever into empty months. Null when there are no
+/// rows at all (nothing to navigate).
+final monthBoundsProvider = Provider<MonthRange?>((ref) {
   final txs = ref.watch(transactionsProvider).valueOrNull ?? const [];
+  if (txs.isEmpty) return null;
+
+  // Explicit scan rather than trusting the newest-first sort order.
+  var oldest = DateTime(txs.first.date.year, txs.first.date.month);
+  var newest = oldest;
+  for (final tx in txs) {
+    final month = DateTime(tx.date.year, tx.date.month);
+    if (month.isBefore(oldest)) oldest = month;
+    if (month.isAfter(newest)) newest = month;
+  }
+
+  // The current month stays reachable even before it has any rows; a
+  // future-dated row (the add form allows up to tomorrow) extends past it.
   final now = DateTime.now();
-  return txs.inMonth(now.year, now.month).summarize();
+  final currentMonth = DateTime(now.year, now.month);
+  if (newest.isBefore(currentMonth)) newest = currentMonth;
+  if (oldest.isAfter(currentMonth)) oldest = currentMonth;
+
+  return (oldest: oldest, newest: newest);
 });
 
-/// Transactions grouped by calendar month (newest month first, newest row
-/// first within a month), for the grouped list view. Empty while loading.
-final transactionsByMonthProvider = Provider<List<MonthGroup>>((ref) {
+/// Whether each month-bar arrow is enabled. Both false when there is nothing
+/// to navigate.
+final monthNavProvider = Provider<({bool canGoBack, bool canGoForward})>((ref) {
+  final bounds = ref.watch(monthBoundsProvider);
+  if (bounds == null) return (canGoBack: false, canGoForward: false);
+  final selected = ref.watch(selectedMonthProvider);
+  return (
+    canGoBack: selected.isAfter(bounds.oldest),
+    canGoForward: selected.isBefore(bounds.newest),
+  );
+});
+
+/// Selected-month aggregates (spending, net invested, spend by category) for
+/// the summary card. Yields zero totals while loading / on error, and for a
+/// month with no rows.
+final selectedMonthSummaryProvider = Provider<TransactionSummary>((ref) {
   final txs = ref.watch(transactionsProvider).valueOrNull ?? const [];
-  return txs.groupByMonth();
+  final month = ref.watch(selectedMonthProvider);
+  return txs.inMonth(month.year, month.month).summarize();
+});
+
+/// The selected month's rows, newest first — the source list is already sorted
+/// and `inMonth` preserves its order. Empty while loading.
+final selectedMonthTransactionsProvider =
+    Provider<List<SheetTransaction>>((ref) {
+  final txs = ref.watch(transactionsProvider).valueOrNull ?? const [];
+  final month = ref.watch(selectedMonthProvider);
+  return txs.inMonth(month.year, month.month);
 });
 
 /// One choice in the add-row account picker.

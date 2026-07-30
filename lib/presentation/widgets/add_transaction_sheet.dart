@@ -131,6 +131,9 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     switch (result) {
       case Success():
         ref.invalidate(transactionsProvider);
+        // Follow the new row: without this, adding a today-dated row while
+        // viewing a past month looks like nothing happened.
+        ref.read(selectedMonthProvider.notifier).select(tx.date);
         // The root ScaffoldMessenger outlives this bottom sheet, so the toast
         // stays visible after the pop.
         _snack(_type.isTrade

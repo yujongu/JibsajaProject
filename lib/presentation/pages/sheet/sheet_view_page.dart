@@ -74,75 +74,215 @@ class SheetViewPage extends ConsumerWidget {
   }
 }
 
-/// Summary header + month-grouped transaction sections in one scroll view.
+/// How long the month change takes, for both the card slide and the list fade.
+const _kMonthTransition = Duration(milliseconds: 260);
+
+/// How far the summary card travels, as a fraction of its own width. Kept small
+/// on purpose — paired with the fade this reads as restraint, where a full-width
+/// sweep would fling the card into the screen edges.
+const _kSlideExtent = 0.2;
+
+/// Month bar + the selected month's summary card and rows, in one scroll view.
 class _TransactionsList extends ConsumerWidget {
   const _TransactionsList({required this.isDark});
   final bool isDark;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final summary = ref.watch(currentMonthSummaryProvider);
-    final months = ref.watch(transactionsByMonthProvider);
     final updatedAt = ref.watch(transactionsUpdatedAtProvider);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
       children: [
         UpdatedAtLabel(updatedAt: updatedAt, isDark: isDark),
-        _SummaryHeader(summary: summary, isDark: isDark),
-        const SizedBox(height: 20),
-        for (final group in months) ...[
-          _MonthHeader(group: group, isDark: isDark),
-          const SizedBox(height: 8),
-          for (final tx in group.transactions) ...[
-            _TransactionTile(tx: tx, isDark: isDark),
-            const SizedBox(height: 8),
-          ],
-          const SizedBox(height: 12),
-        ],
+        _MonthBar(isDark: isDark),
+        const SizedBox(height: 4),
+        _MonthSection(isDark: isDark),
       ],
     );
   }
 }
 
-/// "June 2026" style section label.
-class _MonthHeader extends StatelessWidget {
-  const _MonthHeader({required this.group, required this.isDark});
-  final MonthGroup group;
+/// Static ◀ / "July 2026" / ▶ bar. Deliberately outside the animated section:
+/// a control that slid away with the content it drives would be untappable
+/// mid-flight. Arrows go null-onPressed at the edges of the data, which renders
+/// them disabled.
+class _MonthBar extends ConsumerWidget {
+  const _MonthBar({required this.isDark});
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final month = ref.watch(selectedMonthProvider);
+    final nav = ref.watch(monthNavProvider);
+
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.chevron_left_rounded),
+          tooltip: 'Previous month',
+          onPressed: nav.canGoBack
+              ? () => ref.read(selectedMonthProvider.notifier).shift(-1)
+              : null,
+        ),
+        Expanded(
+          child: Text(
+            DateFormat('MMMM yyyy').format(month),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+              color:
+                  isDark ? AppColors.textPrimary : AppColors.textPrimaryLight,
+            ),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.chevron_right_rounded),
+          tooltip: 'Next month',
+          onPressed: nav.canGoForward
+              ? () => ref.read(selectedMonthProvider.notifier).shift(1)
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
+/// The part that animates on a month change: the summary card slides
+/// horizontally, the rows below cross-fade.
+class _MonthSection extends ConsumerStatefulWidget {
+  const _MonthSection({required this.isDark});
+  final bool isDark;
+
+  @override
+  ConsumerState<_MonthSection> createState() => _MonthSectionState();
+}
+
+class _MonthSectionState extends ConsumerState<_MonthSection> {
+  /// Sign of the last month change: +1 forward, −1 back. Decides which side the
+  /// card enters from. Stays here rather than in provider state because it is
+  /// purely a view concern.
+  double _direction = 1;
+
+  /// The month key this widget last rendered, so the direction can be derived
+  /// from consecutive builds. Comparing here (rather than in a `ref.listen`
+  /// callback) keeps the direction correct regardless of notification ordering;
+  /// it sets no state and triggers no rebuild.
+  int? _lastKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final month = ref.watch(selectedMonthProvider);
+    final summary = ref.watch(selectedMonthSummaryProvider);
+    final txs = ref.watch(selectedMonthTransactionsProvider);
+
+    // Same `year * 100 + month` convention as MonthGroup.sortKey.
+    final key = month.year * 100 + month.month;
+    if (_lastKey != null && key != _lastKey) {
+      _direction = key > _lastKey! ? 1 : -1;
+    }
+    _lastKey = key;
+
+    return Column(
+      children: [
+        // The card's height changes with the number of category bars (0–5), so
+        // animate the height too or the slide ends in a snap.
+        AnimatedSize(
+          duration: _kMonthTransition,
+          curve: Curves.easeOutCubic,
+          child: AnimatedSwitcher(
+            duration: _kMonthTransition,
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) =>
+                _slide(child, animation, key),
+            child: _SummaryHeader(
+              key: ValueKey(key),
+              summary: summary,
+              isDark: widget.isDark,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        AnimatedSize(
+          duration: _kMonthTransition,
+          curve: Curves.easeOutCubic,
+          child: AnimatedSwitcher(
+            duration: _kMonthTransition,
+            child: Column(
+              key: ValueKey(key),
+              children: [
+                if (txs.isEmpty)
+                  _MonthEmptyNotice(month: month, isDark: widget.isDark)
+                else
+                  for (final tx in txs) ...[
+                    _TransactionTile(tx: tx, isDark: widget.isDark),
+                    const SizedBox(height: 8),
+                  ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// AnimatedSwitcher runs the outgoing child's animation in reverse, so a
+  /// single tween would send both children the same way. Testing each child's
+  /// key against the current month is what makes the incoming card enter from
+  /// one side while the outgoing card leaves from the other.
+  Widget _slide(Widget child, Animation<double> animation, int currentKey) {
+    final isIncoming = (child.key as ValueKey<int>).value == currentKey;
+    final dx = (isIncoming ? _direction : -_direction) * _kSlideExtent;
+    return SlideTransition(
+      position: Tween(begin: Offset(dx, 0), end: Offset.zero).animate(animation),
+      child: FadeTransition(opacity: animation, child: child),
+    );
+  }
+}
+
+/// Shown in place of rows for a month that has none. The month bar stays put
+/// above it, so this is never a dead end.
+class _MonthEmptyNotice extends StatelessWidget {
+  const _MonthEmptyNotice({required this.month, required this.isDark});
+  final DateTime month;
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final label = DateFormat('MMMM yyyy').format(
-      DateTime(group.year, group.month),
-    );
     return Padding(
-      padding: const EdgeInsets.only(left: 2, top: 4, bottom: 2),
+      padding: const EdgeInsets.symmetric(vertical: 28),
       child: Text(
-        label,
+        'No transactions in ${DateFormat('MMMM yyyy').format(month)}',
+        textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 13,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.2,
           color: isDark
-              ? AppColors.textSecondary
-              : AppColors.textSecondaryLight,
+              ? AppColors.textTertiary
+              : AppColors.textTertiaryLight,
         ),
       ),
     );
   }
 }
 
-/// Current-month overview: spending, net invested, and a category breakdown.
+/// One month's overview: spending, net invested, and a category breakdown.
+/// Carries no month label of its own — that lives in the static [_MonthBar],
+/// since this whole card slides out of view on a month change.
 class _SummaryHeader extends StatelessWidget {
-  const _SummaryHeader({required this.summary, required this.isDark});
+  const _SummaryHeader({
+    super.key,
+    required this.summary,
+    required this.isDark,
+  });
   final TransactionSummary summary;
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
     final netIsNegative = summary.netInvested < 0;
-    final monthLabel = DateFormat('MMMM yyyy').format(DateTime.now());
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -166,32 +306,6 @@ class _SummaryHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                'This month',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isDark
-                      ? AppColors.textSecondary
-                      : AppColors.textSecondaryLight,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                monthLabel,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: isDark
-                      ? AppColors.textTertiary
-                      : AppColors.textTertiaryLight,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
