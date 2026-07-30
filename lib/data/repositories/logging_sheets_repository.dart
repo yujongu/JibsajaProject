@@ -99,6 +99,10 @@ class LoggingSheetsRepository implements ISheetsRepository {
         final v = tx.amount;
         final amount = v == null ? '' : ' ${v < 0 ? '−' : '+'}${_num(v.abs())}';
         return 'Transfer ${tx.account}$amount';
+      // Read-only types — never appended, so never logged.
+      case TransactionType.deposit:
+      case TransactionType.unknown:
+        return '${tx.type.label} ${tx.account}';
     }
   }
 

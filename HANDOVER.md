@@ -1,6 +1,67 @@
 # HANDOVER
 
 ## Current Milestone
+**Deposit rows no longer render as "Purchase" (2026-07-30).** Analyzer clean,
+**78/78 tests**. Uncommitted.
+
+### The bug
+`TransactionTypeX.fromSheet` used `default: return purchase`, so *every*
+unrecognized `Type` value became a Purchase. `Deposit` exists in the live sheet
+but appeared nowhere in `lib/`, `docs/`, or `test/` — so Deposit rows showed the
+red "Purchase" badge with a shopping-bag icon, and (worse, and not visible as a
+label bug) `summarize()` ran `spend = -amount` on them, so a positive-Amount
+Deposit **subtracted** from `totalSpending` and polluted the `Misc.` category
+bucket. The summary header was understating spending.
+
+### What shipped
+- **Domain** (`transaction_type.dart`): two new members — `deposit` (read-only:
+  cash in, entered in the sheet) and `unknown` (fallback). `fromSheet` now
+  matches every known value **explicitly** (`expense`/`purchase` → `purchase`,
+  plus `deposit`); the `default` branch returns `unknown`, not `purchase`.
+  `userSelectable` is unchanged, so the add-transaction form still offers
+  exactly four types. `unknown.sheetValue` **throws** `UnsupportedError` — it is
+  never written, and a throw beats silently appending a bogus Type.
+- **Domain** (`sheet_transaction.dart`): new `String? rawType` — the sheet's raw
+  Type cell, populated by the model **only** when the type is `unknown`, so an
+  unrecognized row can be badged with the sheet's own wording instead of a
+  generic "Other". Null for every recognized type.
+- **Domain** (`transaction_summary.dart`): `deposit`/`unknown` break out of
+  `summarize()` — neither spending nor investing. **This is the total-fixing
+  line**; expect the spending total to go *up* to its correct value.
+- **Presentation** (`sheet_view_page.dart`): deposit → green
+  (`AppColors.positive`) + `arrow_downward`; unknown → gray
+  (`textTertiaryLight`) + `help_outline`. Badge is `tx.rawType ?? tx.type.label`.
+- **Docs**: `docs/data/sheets.md` Type column + two new "Row types" bullets.
+
+### The 'Gravel' (this session)
+- ⚠️ **The title switch in `_TransactionTile` ends in a `_ =>` wildcard**
+  (`sheet_view_page.dart:361`), so it does **not** fail to compile when a
+  `TransactionType` member is added — new members silently fall into
+  `ticker ?? label`. Every other type switch is exhaustive and *will* error, so
+  the analyzer is a reliable checklist for all of them **except that one**.
+- `flutter analyze` caught a switch the exploration pass missed:
+  `add_transaction_sheet.dart:92` (`_save`'s tx-building switch). It now has a
+  `deposit || unknown => throw UnsupportedError` arm — unreachable, since the
+  form is driven by `userSelectable`.
+- **Two duplicate `_typeColor` functions** (`sheet_view_page.dart:472` and
+  `add_transaction_sheet.dart:456`) both had to be updated. They already
+  disagree cosmetically: the form hardcodes `0xFFF59E0B` for `sell` where the
+  page uses `AppColors.warning` (same value). Not merged — out of scope.
+- One pre-existing test encoded the old behavior and was flipped:
+  `{'type': 'wat'}` now expects `unknown`, not `purchase`.
+- **Not verified on-device yet** — see Next Immediate Step.
+
+## Next Immediate Step
+- `flutter build apk`, install, open Transactions and confirm against the real
+  sheet: Deposit rows are green **DEPOSIT** with a downward arrow and a positive
+  amount; the summary header's spending total is now **higher** (Deposits stopped
+  subtracting); Expense rows still read "Purchase"; the add form still shows four
+  type chips.
+- Watch for gray **help_outline** rows — each one is a Type string in the sheet
+  the app doesn't know. The badge shows the sheet's own wording, so it names
+  whatever needs adding to `fromSheet` next.
+
+## Previous Milestone
 **Runtime sheet switcher + local API audit log (2026-07-06, verified 2026-07-08).** Two new
 features fully implemented and tested on-device. `flutter analyze` clean,
 **73/73 tests**. **Committed as `e57ffbd`.** Real sheet endpoint verified working.
@@ -83,7 +144,7 @@ reconciled against the sheet on a mismatch. Cap **500 newest** entries.
 - ✅ Each sheet's cached data + audit log stays independent (no cross-contamination).
 - ✅ All on-device flows working (Settings → switch, Settings → API call history).
 
-## Next Immediate Step
+### Follow-ups from that milestone (still open)
 - Both sheets are live and working. The app is ready for daily use.
 - To add a third sheet later: the code models it generically (enum `SheetProfile.id`
   currently 'test'/'real'); extend to three slots by adding an `otherId` const,

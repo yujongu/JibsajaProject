@@ -29,7 +29,7 @@ its header documents how to deploy/redeploy. The shared secret is currently
 | :-- | :---------- | :---- |
 | 0   | Date        | ISO-8601 string |
 | 1   | Account     | Free text (e.g. "Robinhood", "BoA") |
-| 2   | Type        | `Expense` \| `Buy` \| `Sell` \| `Transfer` (the app labels the Expense flow "Purchase") |
+| 2   | Type        | `Expense` \| `Buy` \| `Sell` \| `Transfer` \| `Deposit` (the app labels the Expense flow "Purchase"; `Deposit` is **read-only** — displayed, never written). Any other value reads back as "Other" |
 | 3   | Category    | Expense rows only. One of: `Monthly`, `교통`, `식비`, `생필품`, `의류`, `Fun`, `배달음식`, `Misc.`, `Work`, `경조사`, `웨딩`, `여행` |
 | 4   | Description | Short note |
 | 5   | Symbol      | Ticker symbol, Buy/Sell only |
@@ -44,6 +44,15 @@ its header documents how to deploy/redeploy. The shared secret is currently
   date, account, category, description, amount — Amount is written
   **negative** (cash out). Reading is lenient: both `Expense` and the legacy
   `Purchase` parse back to the app's Purchase type.
+- **Deposit** = cash in, entered **directly in the sheet** — the app displays it
+  (green badge, own label) but the add-transaction form never writes it. Amount
+  is read as stored; Deposit rows are excluded from the spending total and the
+  category breakdown.
+- **Anything else** in the Type column reads back as the app's `unknown` type:
+  the row is shown neutrally, badged with the sheet's own wording, and left out
+  of every total. Before 2026-07-30 any unrecognized value — `Deposit`
+  included — silently became a Purchase, which subtracted from the spending
+  total; `TransactionTypeX.fromSheet` now matches every known value explicitly.
 - **Buy / Sell** = an asset trade. The user enters date, brokerage cash
   account, brokerage account, description, symbol, quantity, price — and the
   app appends **two rows** (double-entry: each account's balance is the sum of

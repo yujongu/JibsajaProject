@@ -18,6 +18,7 @@ class SheetTransaction {
     this.price,
     this.amount,
     this.rowIndex = 0,
+    this.rawType,
   });
 
   /// Local-time transaction date. Sheet timestamps arrive as UTC ISO strings;
@@ -59,6 +60,10 @@ class SheetTransaction {
   /// a deterministic order between rows sharing the same [date]. 0 for
   /// app-composed transactions that were never read back.
   final int rowIndex;
+
+  /// The sheet's raw `Type` cell, kept only when [type] is
+  /// [TransactionType.unknown] so the UI can show what the sheet actually said.
+  final String? rawType;
 
   /// Convenience for rows whose [amount] is not explicitly set: trades fall
   /// back to quantity × price. Directly entered Transfers now store their

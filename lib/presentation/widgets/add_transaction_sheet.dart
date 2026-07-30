@@ -117,6 +117,10 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
           quantity: double.tryParse(_qtyCtrl.text.replaceAll(',', '')) ?? 0,
           price: double.tryParse(_priceCtrl.text.replaceAll(',', '')) ?? 0,
         ),
+      // Read-only types: the form only offers TransactionType.userSelectable,
+      // so these are unreachable.
+      TransactionType.deposit || TransactionType.unknown =>
+        throw UnsupportedError('$_type cannot be added from the form'),
     };
 
     setState(() => _saving = true);
@@ -459,6 +463,8 @@ Color _typeColor(TransactionType t) {
     case TransactionType.buy:      return AppColors.primary;
     case TransactionType.sell:     return const Color(0xFFF59E0B);
     case TransactionType.transfer: return AppColors.secondaryFallback;
+    case TransactionType.deposit:  return AppColors.positive;
+    case TransactionType.unknown:  return AppColors.textTertiaryLight;
   }
 }
 

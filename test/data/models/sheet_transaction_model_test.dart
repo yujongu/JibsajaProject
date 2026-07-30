@@ -98,10 +98,45 @@ void main() {
 
     test('falls back gracefully on bad/empty values', () {
       final tx = SheetTransactionModel.fromJson({'type': 'wat'});
-      expect(tx.type, TransactionType.purchase);
+      expect(tx.type, TransactionType.unknown);
       expect(tx.account, '');
       expect(tx.category, isNull);
       expect(tx.ticker, isNull);
+    });
+
+    test('parses a Deposit row as its own type, not a Purchase', () {
+      final tx = SheetTransactionModel.fromJson({
+        'Date': '2026-06-15T00:00:00.000',
+        'Account': 'BoA',
+        'Type': 'Deposit',
+        'Category': '',
+        'Description': 'Paycheck',
+        'Amount': 3000,
+      });
+
+      expect(tx.type, TransactionType.deposit);
+      expect(tx.rawType, isNull); // only kept for unrecognized types
+      expect(tx.account, 'BoA');
+      expect(tx.description, 'Paycheck');
+      expect(tx.computedAmount, 3000);
+    });
+
+    test('an unrecognized type keeps the sheet wording in rawType', () {
+      final tx = SheetTransactionModel.fromJson({
+        'Type': 'Withdrawal',
+        'Amount': -200,
+      });
+
+      expect(tx.type, TransactionType.unknown);
+      expect(tx.rawType, 'Withdrawal');
+    });
+
+    test('a blank or absent Type is unknown with no rawType', () {
+      expect(SheetTransactionModel.fromJson({'Type': ''}).type,
+          TransactionType.unknown);
+      expect(SheetTransactionModel.fromJson({'Type': ''}).rawType, isNull);
+      expect(SheetTransactionModel.fromJson({}).type, TransactionType.unknown);
+      expect(SheetTransactionModel.fromJson({}).rawType, isNull);
     });
 
     test('resolves keys case-insensitively (mixed-case)', () {

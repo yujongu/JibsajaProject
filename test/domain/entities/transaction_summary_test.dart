@@ -91,5 +91,40 @@ void main() {
       expect(summary.netInvested, 950); // 1500 − 550
       expect(summary.totalSpending, 0); // transfers/trades are not spending
     });
+
+    test('deposits are excluded from spending and the category breakdown', () {
+      // A positive-Amount Deposit used to be typed as a Purchase, so −amount
+      // was subtracted from spending — understating the total.
+      final txs = [
+        _tx(date: DateTime(2026, 7, 1), amount: -30), // Expense: 30 of spending
+        _tx(
+            date: DateTime(2026, 7, 5),
+            type: TransactionType.deposit,
+            amount: 3000),
+      ];
+
+      final summary = txs.summarize();
+      expect(summary.totalSpending, 30);
+      expect(summary.netInvested, 0);
+      expect(summary.spendingByCategory, hasLength(1));
+      expect(summary.spendingByCategory.single.category,
+          TransactionCategory.food);
+      expect(summary.spendingByCategory.single.amount, 30);
+    });
+
+    test('unrecognized rows are excluded from every total', () {
+      final txs = [
+        _tx(date: DateTime(2026, 7, 1), amount: -30),
+        _tx(
+            date: DateTime(2026, 7, 6),
+            type: TransactionType.unknown,
+            amount: 500),
+      ];
+
+      final summary = txs.summarize();
+      expect(summary.totalSpending, 30);
+      expect(summary.netInvested, 0);
+      expect(summary.spendingByCategory, hasLength(1));
+    });
   });
 }

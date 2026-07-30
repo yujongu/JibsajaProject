@@ -365,6 +365,11 @@ class _TransactionTile extends StatelessWidget {
       // Transfer rows carry no ticker; show their note (the trade description).
       TransactionType.transfer =>
         tx.description.isNotEmpty ? tx.description : 'Transfer',
+      TransactionType.deposit =>
+        tx.description.isNotEmpty ? tx.description : 'Deposit',
+      TransactionType.unknown => tx.description.isNotEmpty
+          ? tx.description
+          : (tx.rawType ?? tx.type.label),
       _ => tx.ticker ?? tx.type.label,
     };
 
@@ -401,6 +406,8 @@ class _TransactionTile extends StatelessWidget {
                 TransactionType.buy => Icons.trending_up_rounded,
                 TransactionType.sell => Icons.trending_down_rounded,
                 TransactionType.transfer => Icons.swap_horiz_rounded,
+                TransactionType.deposit => Icons.arrow_downward_rounded,
+                TransactionType.unknown => Icons.help_outline_rounded,
               },
               size: 20,
               color: color,
@@ -454,7 +461,8 @@ class _TransactionTile extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                tx.type.label,
+                // An unrecognized row is badged with the sheet's own wording.
+                tx.rawType ?? tx.type.label,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -475,6 +483,8 @@ Color _typeColor(TransactionType t) {
     case TransactionType.buy:      return AppColors.primary;
     case TransactionType.sell:     return AppColors.warning;
     case TransactionType.transfer: return AppColors.secondaryFallback;
+    case TransactionType.deposit:  return AppColors.positive;
+    case TransactionType.unknown:  return AppColors.textTertiaryLight;
   }
 }
 

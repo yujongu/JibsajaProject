@@ -98,6 +98,9 @@ extension TransactionAggregates on List<SheetTransaction> {
           netInvested += amount; // signed: Buy +, Sell −
         case TransactionType.transfer:
           break; // cash leg of a trade — neither spending nor investing
+        case TransactionType.deposit:
+        case TransactionType.unknown:
+          break; // cash in / unrecognized — neither spending nor investing
       }
     }
 

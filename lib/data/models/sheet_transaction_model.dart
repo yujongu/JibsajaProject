@@ -45,11 +45,16 @@ abstract final class SheetTransactionModel {
     final lower = _lowerKeyIndex(json);
 
     final category = lower['category'];
+    final rawType = lower['type']?.toString();
+    final type = TransactionTypeX.fromSheet(rawType);
     return SheetTransaction(
       date: _parseDate(lower['date']),
       rowIndex: rowIndex,
       account: (lower['account'] ?? '').toString(),
-      type: TransactionTypeX.fromSheet(lower['type']?.toString()),
+      type: type,
+      // Keep the sheet's own wording for a Type the app doesn't know, so the
+      // row can be labelled with it instead of a generic fallback.
+      rawType: type == TransactionType.unknown ? _emptyToNull(rawType) : null,
       category: category == null || category.toString().isEmpty
           ? null
           : TransactionCategoryX.fromSheet(category.toString()),
