@@ -1,6 +1,86 @@
 # HANDOVER
 
 ## Current Milestone
+**Transactions month-switch motion made smooth (2026-08-02).** Analyzer clean,
+**87/87 tests**. **Uncommitted** — only `sheet_view_page.dart` changed.
+
+The month-change animation looked janky. Three separate causes, found and fixed
+in order by driving the iPhone 17 simulator and capturing mid-transition frames.
+
+### Context & Decisions
+1. **`AnimatedSize` wrapped directly around `AnimatedSwitcher` stalls, then
+   snaps.** `AnimatedSwitcher`'s default `layoutBuilder` leaves outgoing children
+   unpositioned, so while both children are mounted the `Stack` sizes to their
+   **union** — `AnimatedSize` sees that inflated size for the whole crossfade and
+   only learns the real target when the old child unmounts at the very end.
+   Captured frames showed the old month's category bars and rows still occupying
+   full height most of the way, then a hard collapse.
+   Fix: `_topAlignedSwitcherLayout` — a `layoutBuilder` that wraps previous
+   children in `Positioned`, excluding them from the Stack's sizing pass. Plus
+   `alignment: Alignment.topCenter` on the `AnimatedSize` so it grows from a
+   fixed top anchor instead of the center (the card used to drift vertically).
+2. **Cross-fading the row list doubled the tile cost.** Both months' tiles stayed
+   mounted for the whole 260ms. Removed the row list's animation entirely — it
+   now swaps instantly. Only the card animates; it is bounded at ≤5 category
+   bars, so it is cheap regardless of how many transactions the month has.
+3. **⭐ The real bottleneck: the rows were a `Column` inside a `ListView`.**
+   A `Column` counts as **one** scroll child, so `ListView` virtualization never
+   applied to it — *every* tile in the month was built and laid out in the frame
+   the month changed. Measured against the live sheet: **March/April hold 131–134
+   rows**, so each switch was constructing ~131 tiles (~1,300+ widgets)
+   synchronously. This is why light months felt fine and heavy months did not.
+   Fix: `ListView` → `CustomScrollView`; the rows are now a lazy
+   `SliverList.builder`. Verified by temporary `debugPrint` instrumentation
+   (since removed): a switch into a 131-row month builds **8 tiles, not 131** —
+   ~16× less per-switch build work, and now flat in month size.
+
+### What shipped
+All in `lib/presentation/pages/sheet/sheet_view_page.dart`:
+- New top-level `_topAlignedSwitcherLayout(currentChild, previousChildren)`.
+- `_TransactionsList` is now a `ConsumerStatefulWidget` building a
+  `CustomScrollView`: a `SliverList.list` header (updated-at label, `_MonthBar`,
+  the animated summary card) + a `SliverList.builder` of tiles (or a
+  `SliverToBoxAdapter` empty notice) + a trailing 96px spacer sliver.
+- **`_MonthSection` / `_MonthSectionState` deleted.** Its direction state
+  (`_direction`, `_lastKey`) and the `_slide` transition builder moved verbatim
+  into `_TransactionsListState`; behavior is unchanged.
+
+### The 'Gravel' (this session)
+- ⚠️ **Profile mode does not run on the iOS simulator** ("Profilemode is not
+  supported by iPhone 17"), so every observation this session was **debug mode**,
+  which inflates widget-build cost substantially. The structural win is real in
+  both modes, but the *felt* smoothness should be judged on a physical device or
+  a release build — see Next Immediate Step.
+- The frame captures were `xcrun simctl io booted screenshot` in a tight loop
+  (~8–16 frames over the 260ms transition). Crude but it is what made causes 1
+  and 2 visible. There is **no frame-timing profile** — the 8-vs-131 tile count
+  is a build-work proxy, not a measured ms-per-frame improvement.
+- The previous milestone's gravel note about "`_MonthSection` derives slide
+  direction by comparing keys across builds" **still applies**, but the class is
+  now `_TransactionsListState`. The caveat is unchanged: it assigns fields in
+  `build` and calls no `setState`; don't "fix" it into a `ref.listen` without
+  re-checking direction on the first tap after a data refresh.
+- The old "no explicit `ClipRect` around the sliding card" note still holds — the
+  scroll viewport provides the hard edge, now a `CustomScrollView`'s.
+- Simulator automation needed **Accessibility permission** for the terminal app
+  (System Settings → Privacy & Security → Accessibility) before `osascript`
+  clicks would land; without it every click silently fails with `-25211`.
+- Untouched and still dirty from before this session: `ios/Runner.xcodeproj/
+  project.pbxproj`, `ios/Runner.xcworkspace/contents.xcworkspacedata`, plus an
+  untracked `ios/Podfile.lock` and a stray file literally named `-`.
+
+## Next Immediate Step
+- **Judge the motion on a real device or a release build** (`flutter run
+  --release` / `flutter build apk`), specifically switching in and out of
+  **March and April 2026** — the 131-row months. Simulator debug mode was the
+  only thing available this session and it overstates the cost.
+- If it still reads as laggy there, the next lever is `_TransactionTile` itself
+  (~13 widgets each, two `Container`s with `BoxDecoration`); consider
+  `RepaintBoundary` per tile or a cheaper tile. Do **not** re-add an animation to
+  the row list — that was cause 2.
+- Then commit (`sheet_view_page.dart`, `HANDOVER.md`).
+
+## Previous Milestone
 **Month selector on the Transactions page (2026-07-30).** Analyzer clean,
 **87/87 tests**, release APK built. Committed to `main`.
 **Not verified on-device yet.**

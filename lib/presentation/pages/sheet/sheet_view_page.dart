@@ -82,23 +82,133 @@ const _kMonthTransition = Duration(milliseconds: 260);
 /// sweep would fling the card into the screen edges.
 const _kSlideExtent = 0.2;
 
+/// AnimatedSwitcher's default layoutBuilder leaves outgoing children
+/// unpositioned, so while both the old and new child are mounted the Stack
+/// sizes itself to their union — the enclosing AnimatedSize sees that inflated
+/// size for the whole crossfade and only learns the real target size once the
+/// old child is removed at the very end, producing a stall-then-snap resize
+/// instead of a continuous one. Positioning the outgoing children excludes
+/// them from the Stack's sizing pass, so AnimatedSize can track the incoming
+/// child's size from the moment the switch starts.
+Widget _topAlignedSwitcherLayout(Widget? currentChild, List<Widget> previousChildren) {
+  return Stack(
+    alignment: Alignment.topCenter,
+    children: [
+      for (final child in previousChildren)
+        Positioned(top: 0, left: 0, right: 0, child: child),
+      ?currentChild,
+    ],
+  );
+}
+
 /// Month bar + the selected month's summary card and rows, in one scroll view.
-class _TransactionsList extends ConsumerWidget {
+///
+/// The rows are their own [SliverList] rather than a Column of tiles: a Column
+/// counts as one scroll child, so every tile in the month gets built and laid
+/// out in the same frame the month changes. As a sliver only the on-screen tiles
+/// are built, which is what keeps a heavy month switching as fast as a light one.
+class _TransactionsList extends ConsumerStatefulWidget {
   const _TransactionsList({required this.isDark});
   final bool isDark;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final updatedAt = ref.watch(transactionsUpdatedAtProvider);
+  ConsumerState<_TransactionsList> createState() => _TransactionsListState();
+}
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-      children: [
-        UpdatedAtLabel(updatedAt: updatedAt, isDark: isDark),
-        _MonthBar(isDark: isDark),
-        const SizedBox(height: 4),
-        _MonthSection(isDark: isDark),
+class _TransactionsListState extends ConsumerState<_TransactionsList> {
+  /// Sign of the last month change: +1 forward, −1 back. Decides which side the
+  /// card enters from. Stays here rather than in provider state because it is
+  /// purely a view concern.
+  double _direction = 1;
+
+  /// The month key this widget last rendered, so the direction can be derived
+  /// from consecutive builds. Comparing here (rather than in a `ref.listen`
+  /// callback) keeps the direction correct regardless of notification ordering;
+  /// it sets no state and triggers no rebuild.
+  int? _lastKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final updatedAt = ref.watch(transactionsUpdatedAtProvider);
+    final month = ref.watch(selectedMonthProvider);
+    final summary = ref.watch(selectedMonthSummaryProvider);
+    final txs = ref.watch(selectedMonthTransactionsProvider);
+
+    // Same `year * 100 + month` convention as MonthGroup.sortKey.
+    final key = month.year * 100 + month.month;
+    if (_lastKey != null && key != _lastKey) {
+      _direction = key > _lastKey! ? 1 : -1;
+    }
+    _lastKey = key;
+
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          sliver: SliverList.list(
+            children: [
+              UpdatedAtLabel(updatedAt: updatedAt, isDark: widget.isDark),
+              _MonthBar(isDark: widget.isDark),
+              const SizedBox(height: 4),
+              // The card's height changes with the number of category bars
+              // (0–5), so animate the height too or the slide ends in a snap.
+              AnimatedSize(
+                duration: _kMonthTransition,
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: AnimatedSwitcher(
+                  duration: _kMonthTransition,
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  layoutBuilder: _topAlignedSwitcherLayout,
+                  transitionBuilder: (child, animation) =>
+                      _slide(child, animation, key),
+                  child: _SummaryHeader(
+                    key: ValueKey(key),
+                    summary: summary,
+                    isDark: widget.isDark,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: txs.isEmpty
+              ? SliverToBoxAdapter(
+                  child: _MonthEmptyNotice(
+                    month: month,
+                    isDark: widget.isDark,
+                  ),
+                )
+              : SliverList.builder(
+                  itemCount: txs.length,
+                  itemBuilder: (context, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _TransactionTile(
+                      tx: txs[i],
+                      isDark: widget.isDark,
+                    ),
+                  ),
+                ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 96)),
       ],
+    );
+  }
+
+  /// AnimatedSwitcher runs the outgoing child's animation in reverse, so a
+  /// single tween would send both children the same way. Testing each child's
+  /// key against the current month is what makes the incoming card enter from
+  /// one side while the outgoing card leaves from the other.
+  Widget _slide(Widget child, Animation<double> animation, int currentKey) {
+    final isIncoming = (child.key as ValueKey<int>).value == currentKey;
+    final dx = (isIncoming ? _direction : -_direction) * _kSlideExtent;
+    return SlideTransition(
+      position: Tween(begin: Offset(dx, 0), end: Offset.zero).animate(animation),
+      child: FadeTransition(opacity: animation, child: child),
     );
   }
 }
@@ -146,99 +256,6 @@ class _MonthBar extends ConsumerWidget {
               : null,
         ),
       ],
-    );
-  }
-}
-
-/// The part that animates on a month change: the summary card slides
-/// horizontally, the rows below cross-fade.
-class _MonthSection extends ConsumerStatefulWidget {
-  const _MonthSection({required this.isDark});
-  final bool isDark;
-
-  @override
-  ConsumerState<_MonthSection> createState() => _MonthSectionState();
-}
-
-class _MonthSectionState extends ConsumerState<_MonthSection> {
-  /// Sign of the last month change: +1 forward, −1 back. Decides which side the
-  /// card enters from. Stays here rather than in provider state because it is
-  /// purely a view concern.
-  double _direction = 1;
-
-  /// The month key this widget last rendered, so the direction can be derived
-  /// from consecutive builds. Comparing here (rather than in a `ref.listen`
-  /// callback) keeps the direction correct regardless of notification ordering;
-  /// it sets no state and triggers no rebuild.
-  int? _lastKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final month = ref.watch(selectedMonthProvider);
-    final summary = ref.watch(selectedMonthSummaryProvider);
-    final txs = ref.watch(selectedMonthTransactionsProvider);
-
-    // Same `year * 100 + month` convention as MonthGroup.sortKey.
-    final key = month.year * 100 + month.month;
-    if (_lastKey != null && key != _lastKey) {
-      _direction = key > _lastKey! ? 1 : -1;
-    }
-    _lastKey = key;
-
-    return Column(
-      children: [
-        // The card's height changes with the number of category bars (0–5), so
-        // animate the height too or the slide ends in a snap.
-        AnimatedSize(
-          duration: _kMonthTransition,
-          curve: Curves.easeOutCubic,
-          child: AnimatedSwitcher(
-            duration: _kMonthTransition,
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) =>
-                _slide(child, animation, key),
-            child: _SummaryHeader(
-              key: ValueKey(key),
-              summary: summary,
-              isDark: widget.isDark,
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        AnimatedSize(
-          duration: _kMonthTransition,
-          curve: Curves.easeOutCubic,
-          child: AnimatedSwitcher(
-            duration: _kMonthTransition,
-            child: Column(
-              key: ValueKey(key),
-              children: [
-                if (txs.isEmpty)
-                  _MonthEmptyNotice(month: month, isDark: widget.isDark)
-                else
-                  for (final tx in txs) ...[
-                    _TransactionTile(tx: tx, isDark: widget.isDark),
-                    const SizedBox(height: 8),
-                  ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// AnimatedSwitcher runs the outgoing child's animation in reverse, so a
-  /// single tween would send both children the same way. Testing each child's
-  /// key against the current month is what makes the incoming card enter from
-  /// one side while the outgoing card leaves from the other.
-  Widget _slide(Widget child, Animation<double> animation, int currentKey) {
-    final isIncoming = (child.key as ValueKey<int>).value == currentKey;
-    final dx = (isIncoming ? _direction : -_direction) * _kSlideExtent;
-    return SlideTransition(
-      position: Tween(begin: Offset(dx, 0), end: Offset.zero).animate(animation),
-      child: FadeTransition(opacity: animation, child: child),
     );
   }
 }
