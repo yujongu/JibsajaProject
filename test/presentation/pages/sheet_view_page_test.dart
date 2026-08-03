@@ -1,0 +1,126 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:jibsaja/domain/entities/sheet_account.dart';
+import 'package:jibsaja/domain/entities/sheet_transaction.dart';
+import 'package:jibsaja/domain/entities/transaction_category.dart';
+import 'package:jibsaja/domain/entities/transaction_type.dart';
+import 'package:jibsaja/presentation/pages/sheet/sheet_view_page.dart';
+import 'package:jibsaja/presentation/providers/sheets_providers.dart';
+
+/// Pumps the page with the sheet-backed providers stubbed out, so no repository
+/// (and no network) is ever constructed. [transactionsUpdatedAtProvider] is
+/// overridden too because it reaches for the repository directly.
+Future<void> _pumpPage(
+  WidgetTester tester,
+  List<SheetTransaction> txs,
+) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        transactionsProvider.overrideWith((ref) => Stream.value(txs)),
+        accountsProvider.overrideWith(
+          (ref) => Stream.value(
+            const [SheetAccount(name: 'BoA', currency: 'KRW')],
+          ),
+        ),
+        transactionsUpdatedAtProvider.overrideWithValue(null),
+      ],
+      child: const MaterialApp(home: SheetViewPage()),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  // The page opens on the current month, so a row dated in the past leaves the
+  // month on screen empty.
+  final lastYear = DateTime(DateTime.now().year - 1, 6, 15);
+
+  group('summary card with no transactions in the month', () {
+    testWidgets('still renders its stat blocks', (tester) async {
+      await _pumpPage(tester, [
+        SheetTransaction(
+          date: lastYear,
+          account: 'BoA',
+          type: TransactionType.purchase,
+          category: TransactionCategory.food,
+          amount: -10,
+          rowIndex: 0,
+        ),
+      ]);
+
+      // Regression: an empty month used to summarize to zero sections, leaving
+      // the card's Column childless. It then shrank to its 18px padding, and
+      // an 18px border radius on a 36px box renders as a circle.
+      expect(find.text('Spending'), findsOneWidget);
+      expect(find.text('Income'), findsOneWidget);
+      expect(find.text('Net flow'), findsOneWidget);
+    });
+
+    testWidgets('keeps the card at full width, not collapsed to a circle',
+        (tester) async {
+      await _pumpPage(tester, [
+        SheetTransaction(
+          date: lastYear,
+          account: 'BoA',
+          type: TransactionType.purchase,
+          category: TransactionCategory.food,
+          amount: -10,
+          rowIndex: 0,
+        ),
+      ]);
+
+      // The card is the Container wrapping the 'Spending' stat block; 36px wide
+      // was the bug, full width minus the page's 16px side padding is correct.
+      final card = tester.getSize(
+        find
+            .ancestor(
+              of: find.text('Spending'),
+              matching: find.byType(Container),
+            )
+            .last,
+      );
+      expect(card.width, greaterThan(200));
+    });
+
+    testWidgets('shows zeroed, unlabelled amounts', (tester) async {
+      await _pumpPage(tester, [
+        SheetTransaction(
+          date: lastYear,
+          account: 'BoA',
+          type: TransactionType.purchase,
+          category: TransactionCategory.food,
+          amount: -10,
+          rowIndex: 0,
+        ),
+      ]);
+
+      // No row means no currency to name, so the zeros carry no symbol.
+      // Spending and Income both read '0'; the net-flow caption carries an
+      // explicit sign, and _NetCaption treats any non-negative value as '+'.
+      expect(find.text('0'), findsNWidgets(2));
+      expect(find.text('+0'), findsOneWidget);
+      // Nothing to break down, and no trades, so those sections stay hidden.
+      expect(find.text('Spending by category'), findsNothing);
+      expect(find.text('Invested'), findsNothing);
+    });
+  });
+
+  testWidgets('a month with rows still shows its real totals', (tester) async {
+    final now = DateTime.now();
+    await _pumpPage(tester, [
+      SheetTransaction(
+        date: DateTime(now.year, now.month, 1),
+        account: 'BoA',
+        type: TransactionType.purchase,
+        category: TransactionCategory.food,
+        amount: -1200,
+        rowIndex: 0,
+      ),
+    ]);
+
+    expect(find.text('₩1,200'), findsWidgets);
+    expect(find.text('Spending by category'), findsOneWidget);
+  });
+}

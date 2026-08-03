@@ -73,6 +73,18 @@ class CurrencySummary {
   /// How much happened in this currency at all; orders the sections so the
   /// dominant currency leads.
   double get activity => totalSpending + totalIncome + invested + divested;
+
+  /// All-zero section, for a period that has no rows at all. Currency is null
+  /// because there is no row to take one from — the amounts then render
+  /// unlabelled, which is the same treatment any unresolved currency gets.
+  static const zero = CurrencySummary(
+    currency: null,
+    totalSpending: 0,
+    totalIncome: 0,
+    invested: 0,
+    divested: 0,
+    spendingByCategory: [],
+  );
 }
 
 /// Rows left out of every total, counted by reason so the UI can say what is

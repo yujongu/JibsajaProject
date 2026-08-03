@@ -323,6 +323,15 @@ class _SummaryHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A month with no rows summarizes to no sections at all. Rendering that
+    // literally leaves the Column childless, and the card shrinks to its own
+    // padding — a 36px box with an 18px radius, i.e. a circle. Show one zeroed
+    // section instead, so the card keeps its shape across every month.
+    final sections =
+        summary.byCurrency.isEmpty
+            ? const [CurrencySummary.zero]
+            : summary.byCurrency;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -345,7 +354,7 @@ class _SummaryHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final (i, cs) in summary.byCurrency.indexed) ...[
+          for (final (i, cs) in sections.indexed) ...[
             if (i > 0) ...[
               const SizedBox(height: 18),
               Divider(
@@ -360,7 +369,7 @@ class _SummaryHeader extends StatelessWidget {
               // With one currency the ₩/$ prefixes already establish scope, so
               // a header would just be noise. It earns its place only when
               // there are two sections to tell apart.
-              showHeader: summary.byCurrency.length > 1,
+              showHeader: sections.length > 1,
               isDark: isDark,
             ),
           ],

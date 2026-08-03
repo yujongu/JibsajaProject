@@ -2,8 +2,12 @@
 
 ## Current Milestone
 **Summary card reworked: currency-scoped totals, income, invested/divested
-(2026-08-03).** Analyzer clean, **108/108 tests**, release APK built.
+(2026-08-03).** Analyzer clean, **112/112 tests**, release APK built.
 **Uncommitted.**
+
+> **Follow-up fix, same day:** an empty month rendered the card as a **circle**.
+> See "Empty-month card" below — the fix is committed to the working tree and
+> the APK above **predates it**, so rebuild before verifying on-device.
 
 The card showed two stats — Spending and Net invested — that between them had
 four problems. All four were fixed in one pass.
@@ -87,14 +91,74 @@ four problems. All four were fixed in one pass.
 - **The uncounted note is static text, not a tap target.** It names the reason
   ("1 account missing from Accounts") but not *which* account — cross-reference
   the bare-number rows in the list below it.
-- `TransactionSummary.empty` has an empty `byCurrency`, so any consumer must
-  handle a card with no sections (a month with no rows). Only `_SummaryHeader`
-  consumes it today and it iterates, so this is safe by construction.
+- ~~`TransactionSummary.empty` has an empty `byCurrency` … safe by
+  construction.~~ **Wrong — this was the bug.** See "Empty-month card" below.
 - Pre-existing and untouched: dead `groupByMonth()` + `MonthGroup` in
   `transaction_summary.dart`; the two duplicate `_typeColor` functions; the
   Gradle KGP deprecation warnings on every APK build.
 
+## Empty-month card — the circle bug (2026-08-03, follow-up)
+A month with no transactions rendered the summary card as a **small circle**.
+
+### Context & Decisions
+1. **Cause was layout collapse, not arithmetic.** `summarize()` returns
+   `TransactionSummary.empty` for a month with no rows, so `byCurrency` is `[]`
+   and `uncounted.isEmpty` is true — `_SummaryHeader`'s `Column` got **zero
+   children**. The card then shrank to its own `EdgeInsets.all(18)` padding, and
+   an 18px `borderRadius` on the resulting ~36px box is exactly a circle. The
+   one division in the domain layer (`fraction`) was already guarded and is
+   **not** implicated.
+2. **⭐ The card now shows zeroed stats rather than hiding** (user's choice over
+   hiding it or showing a placeholder message). Keeps the layout stable across
+   months. The trade-off accepted: zeros can read as real data — mitigated by
+   the `_MonthEmptyNotice` directly below, which still says "No transactions in
+   {Month} {Year}".
+3. **The zero section carries a `null` currency**, so amounts render unlabelled
+   via `_money`'s existing `null || ''` arm. No row means no currency to name,
+   and inventing one (KRW) would be a guess.
+4. **`byCurrency.isEmpty` is an exact "no rows" signal.** Verified: a month whose
+   rows are *all* unknown-type still takes `summarize()`'s `buckets.isEmpty`
+   branch and yields one all-zero section, so the guard has no false positives.
+
+### What shipped
+- **Domain** (`transaction_summary.dart`): `CurrencySummary.zero` — an all-zero,
+  null-currency const, sibling to `TransactionSummary.empty`.
+- **Presentation** (`sheet_view_page.dart`): `_SummaryHeader.build` computes
+  `sections = byCurrency.isEmpty ? [CurrencySummary.zero] : byCurrency` and
+  iterates that. `showHeader` reads `sections.length > 1`. **No other change** —
+  `_CurrencySection` already hides the Invested/Divested block when both are
+  zero and the category list when it is empty, so the empty card lands on
+  exactly Spending / Income / Net flow.
+- **Tests** (+4 → 112): new `test/presentation/pages/sheet_view_page_test.dart`
+  — the first widget test to pump a whole page. Stubs `transactionsProvider`,
+  `accountsProvider` and `transactionsUpdatedAtProvider` (that last one reaches
+  for the repository directly), so no repository or network is constructed.
+  Covers: stat blocks present, card width not collapsed, zeros unlabelled, and a
+  populated month still showing real totals. **Confirmed to fail without the
+  fix** (3 of the 4 fail; the populated-month case still passes).
+
+### The 'Gravel' (this session)
+- **A zero net flow renders as `+0`.** `_NetCaption` treats any non-negative
+  value as `+` (`sheet_view_page.dart:547`). Pre-existing and reachable in a real
+  month too (income exactly equals spending) — left untouched as out of scope,
+  but it is the odd-looking part of the empty card.
+- **The empty state now says "nothing here" twice** — zeroed card plus the
+  `_MonthEmptyNotice` below it. Accepted deliberately (decision 2); if it reads
+  as redundant on-device, the lever is dropping the notice, not the card.
+- **The width assertion in the widget test is loose** (`greaterThan(200)`). It
+  separates a 36px circle from a full-width card, which is the regression that
+  matters; it is not a layout-precision test.
+- **`CurrencySummary.zero` has no domain test of its own** — it is covered
+  through the widget tests. It is a const with no logic.
+- The card's `AnimatedSize` now animates between a zeroed card and a populated
+  one when switching months. Not observed on-device yet.
+
 ## Next Immediate Step
+- **Rebuild the APK** (`flutter build apk`) — the existing one predates the
+  empty-month fix — then install and check a **month with no transactions**:
+  the card is a normal full-width card reading Spending `0` / Income `0` /
+  Net flow `+0`, with "No transactions in …" below it, and **both arrows still
+  work** from that month.
 - **Install `build/app/outputs/flutter-apk/app-release.apk`** and open
   Transactions against the **Real** sheet:
   - A normal single-currency month shows **no currency header** and reads like
