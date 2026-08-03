@@ -1,8 +1,131 @@
 # HANDOVER
 
 ## Current Milestone
+**Per-row currency from the sheet's `Accounts` tab (2026-08-03).** Analyzer
+clean, **98/98 tests**, release APK built. **Uncommitted.**
+
+Transaction amounts were bare, unlabelled numbers — a ₩12,500 lunch and a
+$12,500 trade looked identical. Each row's amount now carries its account's
+currency: `₩12,500` / `$1,234.56`.
+
+### Context & Decisions
+1. **⭐ The currency source is an existing sheet column, not a new one.** This
+   was the open question that parked multi-currency back in June (options were:
+   add a Currency column / infer from the account name / hardcode). It turned
+   out the **`Accounts` tab already had it** — `Account Name` in column A,
+   `Currency` in column D. No sheet change, no inference, no guessing.
+2. **No backend change and no redeploy.** `Code.gs`'s `doGet` already serves any
+   tab as a raw grid via `?sheet=<name>` (the path `DashboardDB1` uses), so
+   `?sheet=Accounts` worked against the deployed script as-is. Verified live
+   before writing the parser: the response's header row is exactly
+   `Account Name | Type | Institution | Currency | Include? | …`.
+3. **Read-only by construction** (explicit user requirement — nothing may be
+   written to the sheet). The feature adds exactly one call, a `GET`; the POST
+   path, `appendTransaction`, `toRows`, and `add_transaction_sheet.dart` are all
+   untouched, and the app never writes the `Accounts` tab.
+4. **Header-anchored parsing, not fixed A/D indices** — same rationale as
+   `DashboardSummaryModel.fromGrid`. Find the `Account Name` cell, then
+   `Currency` in that same header row, so a column inserted in the tab does not
+   silently shift the mapping.
+5. **A broken/missing `Accounts` tab must not break the Transactions page.**
+   Unlike `fetchDashboard` (where a missing `grid` is a hard `Failure`, because
+   all-zero KPIs look like real data), `_parseAccountsBody` degrades to `const
+   []` on an error payload, a missing grid, or missing headers. The tab only
+   supplies labels.
+6. **Unmapped rows render exactly as before — a bare number** (user's choice
+   over defaulting to KRW or USD). Honest, and it makes accounts missing from
+   the `Accounts` tab visible at a glance.
+7. **KRW prints with no decimals** (`#,##0`) since the won has no minor unit;
+   USD keeps today's `#,##0.##`. An unfamiliar code is prefixed literally
+   (`EUR 12.5`) rather than guessed at.
+8. **Summary card totals deliberately still mix currencies.** Out of scope per
+   the user; see Gravel.
+
+### What shipped
+- **Domain**: `entities/sheet_account.dart` (`SheetAccount {name, currency}`);
+  `i_sheets_repository.dart` gained `fetchAccounts()` + `cachedAccounts()`
+  (no `cachedAccountsAt()` — nothing shows an accounts freshness label).
+- **Data**: `models/sheet_account_model.dart` (`fromGrid`, header-anchored);
+  `sheets_repository_impl.dart` — `fetchAccounts()` + `_parseAccountsBody()` +
+  `cachedAccounts()`, modelled on the dashboard trio; `sheets_local_cache.dart`
+  — `cache.accounts.body.{profileId}.v1` (body only, no timestamp key), included
+  in `evict()`; `logging_sheets_repository.dart` — two pass-throughs in the
+  reads block (reads stay unlogged).
+- **Presentation**: `sheets_providers.dart` — `accountsProvider`
+  (`StreamProvider`, reuses `_cachedThenLive` verbatim) and
+  `accountCurrenciesProvider` (`Map<String,String>`, keys trimmed+lowercased,
+  blank currencies dropped). `sheet_view_page.dart` — new top-level
+  `_money(double, String?)`; `_TransactionTile` gained a `String? currency`
+  field; `_TransactionsListState.build` watches the map **once** and passes the
+  code per tile (no per-tile `ref.watch` — the sliver builder is the hot path
+  from the previous milestone).
+- **Docs**: `docs/data/sheets.md` — new "Accounts tab" section (column table,
+  header-anchoring, the fallback rule); the stale "Account names" section now
+  says the picker comes from the Transactions tab via `accountOptionsProvider`,
+  not from `Accounts`.
+- **Tests** (+11 → 98): new `test/data/models/sheet_account_model_test.dart`
+  (live layout, inserted column, trimming/upper-casing, blank currency, nameless
+  rows, missing headers, ragged rows); 3 `accountCurrenciesProvider` cases;
+  accounts round-trip + evict in the cache test. Both `ISheetsRepository` fakes
+  (`_FakeRepo`, `_FakeDelegate`) implement the two new members — `_FakeRepo`
+  gained a scriptable `accountsResult`.
+
+### The 'Gravel' (this session)
+- **Not verified on-device yet.** The APK is built but not installed — see Next
+  Immediate Step.
+- **The summary card still adds KRW and USD into one Spending / Net invested
+  number.** Pre-existing and explicitly out of scope this session, but the row
+  currencies now make the mismatch *visible*: a card total no longer matches any
+  single currency's rows. The parked decision (from June) if you resume it:
+  separate line per currency, **no FX conversion**.
+- **This adds a third GET on the Transactions page** (`?sheet=Accounts`). It is
+  cache-first, so it never blocks first paint, and its label
+  (`'accountsProvider'`) is *not* what the syncing bar watches
+  (`isFetchingProvider('transactionsProvider')`) — so the bar's behavior is
+  unchanged. A cold start with no cache retries it twice before giving up, same
+  as the others.
+- **The currency join is by account *name* string.** Rename an account in the
+  Transactions tab without renaming it in `Accounts` (or vice versa) and that
+  row silently loses its symbol. Trimming + lowercasing absorbs whitespace and
+  case drift only.
+- **`_money` is a private top-level function in `sheet_view_page.dart` and has
+  no direct test** — coverage is at the model and provider level. It is 12 lines;
+  if it grows (more currencies, negative-sign styling), lift it out to a shared
+  util and test it.
+- The `Accounts` tab's `Current Balance` / `Type` columns are read into the grid
+  but **not** parsed — they are what a future net-worth extension (crypto + card
+  debt, absent from `DashboardDB1`) would sum.
+- Pre-existing and untouched: the Gradle KGP deprecation warnings on every APK
+  build (`shared_preferences_android`); the two duplicate `_typeColor` functions
+  (`sheet_view_page.dart` / `add_transaction_sheet.dart`); dead `groupByMonth()`
+  + `MonthGroup` in `transaction_summary.dart`.
+- **Stale notes now corrected**: the previous milestone's "Uncommitted" claim was
+  wrong (it shipped as `942182b`), and its gravel item about
+  `currency_formatter.dart` is moot — that file no longer exists.
+
+## Next Immediate Step
+- **Install `build/app/outputs/flutter-apk/app-release.apk`** and open
+  Transactions against the **Real** sheet:
+  - KRW accounts show `₩` with no decimals; USD accounts (e.g. 토스증권 달러,
+    토스증권 해외 주식) show `$`.
+  - Both legs of a Buy/Sell pair show the same symbol when the cash and
+    brokerage accounts share a currency.
+  - Note any row still rendering a **bare number** — that account is missing
+    from the `Accounts` tab (or its Currency cell is blank). Those are rows to
+    add to the sheet, not a bug.
+  - Airplane mode → relaunch: cached currencies still render.
+  - **Do not tap Add while verifying** — this change is read-only and the append
+    flow is unrelated.
+- Then commit: `sheet_account.dart`, `sheet_account_model.dart`,
+  `i_sheets_repository.dart`, `sheets_repository_impl.dart`,
+  `sheets_local_cache.dart`, `logging_sheets_repository.dart`,
+  `sheets_providers.dart`, `sheet_view_page.dart`, `docs/data/sheets.md`, the
+  four test files, `HANDOVER.md`.
+
+## Previous Milestone
 **Transactions month-switch motion made smooth (2026-08-02).** Analyzer clean,
-**87/87 tests**. **Uncommitted** — only `sheet_view_page.dart` changed.
+**87/87 tests**. **Committed as `942182b`.** Verified on a physical device with
+a release build (2026-08-03): the motion reads clean.
 
 The month-change animation looked janky. Three separate causes, found and fixed
 in order by driving the iPhone 17 simulator and capturing mid-transition frames.
@@ -69,16 +192,11 @@ All in `lib/presentation/pages/sheet/sheet_view_page.dart`:
   project.pbxproj`, `ios/Runner.xcworkspace/contents.xcworkspacedata`, plus an
   untracked `ios/Podfile.lock` and a stray file literally named `-`.
 
-## Next Immediate Step
-- **Judge the motion on a real device or a release build** (`flutter run
-  --release` / `flutter build apk`), specifically switching in and out of
-  **March and April 2026** — the 131-row months. Simulator debug mode was the
-  only thing available this session and it overstates the cost.
-- If it still reads as laggy there, the next lever is `_TransactionTile` itself
-  (~13 widgets each, two `Container`s with `BoxDecoration`); consider
-  `RepaintBoundary` per tile or a cheaper tile. Do **not** re-add an animation to
-  the row list — that was cause 2.
-- Then commit (`sheet_view_page.dart`, `HANDOVER.md`).
+### Resolved (2026-08-03)
+- ✅ **Judged on a physical device with a release build — the animation reads
+  clean.** The simulator debug-mode caveat above was overstating the cost, as
+  suspected. The `_TransactionTile` follow-up lever (`RepaintBoundary` per tile)
+  is therefore **not needed** and was not pursued. Committed as `942182b`.
 
 ## Previous Milestone
 **Month selector on the Transactions page (2026-07-30).** Analyzer clean,

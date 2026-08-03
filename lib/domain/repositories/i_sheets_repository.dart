@@ -1,5 +1,6 @@
 import '../entities/dashboard_summary.dart';
 import '../entities/result.dart';
+import '../entities/sheet_account.dart';
 import '../entities/sheet_transaction.dart';
 
 /// The single data boundary of the app: read rows from the Google Sheet and
@@ -14,6 +15,10 @@ abstract class ISheetsRepository {
   /// Fetches the pre-computed portfolio snapshot from the `DashboardDB1` tab.
   Future<Result<DashboardSummary>> fetchDashboard();
 
+  /// Fetches the `Accounts` tab, which names each account's currency. Read
+  /// only — the app never appends to or edits that tab.
+  Future<Result<List<SheetAccount>>> fetchAccounts();
+
   /// The rows from the last successful [fetchTransactions], persisted
   /// on-device, or null when nothing usable is cached. Synchronous and
   /// best-effort so startup can render before the live fetch lands.
@@ -22,6 +27,10 @@ abstract class ISheetsRepository {
   /// The snapshot from the last successful [fetchDashboard], persisted
   /// on-device, or null when nothing usable is cached.
   DashboardSummary? cachedDashboard();
+
+  /// The accounts from the last successful [fetchAccounts], persisted
+  /// on-device, or null when nothing usable is cached.
+  List<SheetAccount>? cachedAccounts();
 
   /// When the cached transactions were fetched from the sheet — i.e. how old
   /// the data currently shown is. Null when nothing is cached.

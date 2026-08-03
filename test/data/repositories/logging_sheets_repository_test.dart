@@ -5,6 +5,7 @@ import 'package:jibsaja/data/repositories/logging_sheets_repository.dart';
 import 'package:jibsaja/domain/entities/api_call_record.dart';
 import 'package:jibsaja/domain/entities/dashboard_summary.dart';
 import 'package:jibsaja/domain/entities/result.dart';
+import 'package:jibsaja/domain/entities/sheet_account.dart';
 import 'package:jibsaja/domain/entities/sheet_transaction.dart';
 import 'package:jibsaja/domain/entities/transaction_category.dart';
 import 'package:jibsaja/domain/entities/transaction_type.dart';
@@ -30,9 +31,14 @@ class _FakeDelegate implements ISheetsRepository {
   Future<Result<DashboardSummary>> fetchDashboard() async =>
       const Failure('unused');
   @override
+  Future<Result<List<SheetAccount>>> fetchAccounts() async =>
+      const Success([SheetAccount(name: 'Toss', currency: 'KRW')]);
+  @override
   List<SheetTransaction>? cachedTransactions() => null;
   @override
   DashboardSummary? cachedDashboard() => null;
+  @override
+  List<SheetAccount>? cachedAccounts() => null;
   @override
   DateTime? cachedTransactionsAt() => null;
   @override
@@ -136,8 +142,10 @@ void main() {
 
       await repo.fetchTransactions();
       await repo.fetchDashboard();
+      await repo.fetchAccounts();
       repo.cachedTransactions();
       repo.cachedDashboard();
+      repo.cachedAccounts();
       repo.cachedTransactionsAt();
       repo.cachedDashboardAt();
 

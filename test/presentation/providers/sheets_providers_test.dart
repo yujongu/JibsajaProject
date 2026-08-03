@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jibsaja/domain/entities/dashboard_summary.dart';
 import 'package:jibsaja/domain/entities/result.dart';
+import 'package:jibsaja/domain/entities/sheet_account.dart';
 import 'package:jibsaja/domain/entities/sheet_transaction.dart';
 import 'package:jibsaja/domain/entities/transaction_type.dart';
 import 'package:jibsaja/domain/repositories/i_sheets_repository.dart';
@@ -22,10 +23,15 @@ SheetTransaction _tx(
 /// Scriptable repository: [fetchResults] are returned in order; the last one
 /// repeats if more fetches happen than scripted.
 class _FakeRepo implements ISheetsRepository {
-  _FakeRepo({this.cached, required this.fetchResults});
+  _FakeRepo({
+    this.cached,
+    required this.fetchResults,
+    this.accountsResult = const Failure('unused'),
+  });
 
   final List<SheetTransaction>? cached;
   final List<Result<List<SheetTransaction>>> fetchResults;
+  final Result<List<SheetAccount>> accountsResult;
   int fetchCount = 0;
 
   @override
@@ -49,6 +55,10 @@ class _FakeRepo implements ISheetsRepository {
   @override
   Future<Result<DashboardSummary>> fetchDashboard() async =>
       const Failure('unused');
+  @override
+  List<SheetAccount>? cachedAccounts() => null;
+  @override
+  Future<Result<List<SheetAccount>>> fetchAccounts() async => accountsResult;
   @override
   Future<Result<void>> appendTransaction(SheetTransaction tx) async =>
       const Success(null);
@@ -252,6 +262,46 @@ void main() {
       expect(container.read(selectedMonthSummaryProvider).totalSpending, 50);
       expect(container.read(selectedMonthTransactionsProvider).single.account,
           'OLD');
+    });
+  });
+
+  group('accountCurrenciesProvider', () {
+    Future<ProviderContainer> loaded(Result<List<SheetAccount>> accounts) async {
+      final container = ProviderContainer(overrides: [
+        sheetsRepositoryProvider.overrideWithValue(_FakeRepo(
+          fetchResults: [const Success(<SheetTransaction>[])],
+          accountsResult: accounts,
+        )),
+      ]);
+      addTearDown(container.dispose);
+      container.listen(accountsProvider, (_, _) {}, fireImmediately: true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      return container;
+    }
+
+    test('maps account names case- and whitespace-insensitively', () async {
+      final container = await loaded(const Success([
+        SheetAccount(name: '  BoA ', currency: 'USD'),
+        SheetAccount(name: '토스증권 국내 주식', currency: 'KRW'),
+      ]));
+
+      final currencies = container.read(accountCurrenciesProvider);
+      expect(currencies['boa'], 'USD');
+      expect(currencies['토스증권 국내 주식'], 'KRW');
+    });
+
+    test('an account with a blank currency is left out', () async {
+      final container = await loaded(const Success([
+        SheetAccount(name: 'Mystery', currency: ''),
+      ]));
+
+      expect(container.read(accountCurrenciesProvider), isEmpty);
+    });
+
+    test('a failed accounts fetch degrades to an empty map', () async {
+      final container = await loaded(const Failure('Accounts tab missing'));
+
+      expect(container.read(accountCurrenciesProvider), isEmpty);
     });
   });
 }

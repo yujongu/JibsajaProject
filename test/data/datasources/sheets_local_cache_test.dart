@@ -43,16 +43,31 @@ void main() {
       final test = SheetsLocalCache(prefs, profileId: 'test');
       real.writeTransactions('{"rows": []}');
       real.writeDashboard('{"grid": []}');
+      real.writeAccounts('{"grid": []}');
       test.writeTransactions('{"rows": []}');
 
       real.evict();
 
       expect(real.readTransactions(), isNull);
       expect(real.readDashboard(), isNull);
+      expect(real.readAccounts(), isNull);
       expect(real.transactionsTimestamp(), isNull);
       expect(real.dashboardTimestamp(), isNull);
       // The other slot is untouched.
       expect(test.readTransactions(), isNotNull);
+    });
+
+    test('accounts round-trip and stay namespaced by profile', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final real = SheetsLocalCache(prefs, profileId: 'real');
+      final test = SheetsLocalCache(prefs, profileId: 'test');
+
+      real.writeAccounts('{"grid": [["Account Name","Currency"]]}');
+
+      expect(real.readAccounts(), '{"grid": [["Account Name","Currency"]]}');
+      expect(test.readAccounts(), isNull);
+      expect(prefs.getString('cache.accounts.body.real.v1'), isNotNull);
     });
   });
 }

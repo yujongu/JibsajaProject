@@ -6,6 +6,7 @@ import '../../data/repositories/logging_sheets_repository.dart';
 import '../../data/repositories/sheets_repository_impl.dart';
 import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/result.dart';
+import '../../domain/entities/sheet_account.dart';
 import '../../domain/entities/sheet_transaction.dart';
 import '../../domain/entities/transaction_summary.dart';
 import '../../domain/repositories/i_sheets_repository.dart';
@@ -129,6 +130,33 @@ final dashboardProvider = StreamProvider<DashboardSummary>((ref) {
     fetch: repo.fetchDashboard,
     label: 'dashboardProvider',
   );
+});
+
+/// Rows of the sheet's `Accounts` tab — read only, purely to learn each
+/// account's currency.
+///
+/// Same cache-first behavior as [transactionsProvider]. A failure here must not
+/// break the Transactions page; [accountCurrenciesProvider] degrades to an
+/// empty map, so amounts simply render without a currency symbol.
+final accountsProvider = StreamProvider<List<SheetAccount>>((ref) {
+  final repo = ref.watch(sheetsRepositoryProvider);
+  return _cachedThenLive(
+    ref: ref,
+    cached: repo.cachedAccounts(),
+    fetch: repo.fetchAccounts,
+    label: 'accountsProvider',
+  );
+});
+
+/// Account name (trimmed, lowercased) → currency code, for looking up the
+/// currency of a transaction row's Account. Accounts with a blank Currency
+/// cell are left out, so a miss and a blank cell behave identically: no symbol.
+final accountCurrenciesProvider = Provider<Map<String, String>>((ref) {
+  final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
+  return {
+    for (final a in accounts)
+      if (a.currency.isNotEmpty) a.name.trim().toLowerCase(): a.currency,
+  };
 });
 
 /// When the transaction rows currently on screen were fetched from the sheet

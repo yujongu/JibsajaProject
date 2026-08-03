@@ -170,10 +170,44 @@ cell the sheet serialises as a bogus `1904-...` date string.
 
 > **Net-worth scope:** `총 자산` = `총 보유 현금` + `총 보유 주식` only. Crypto
 > (업비트/빗썸) and card debt live in the **`Accounts`** tab and are *not* in
-> `DashboardDB1`'s totals. To include them later, read `?sheet=Accounts`
-> (columns: `Account Name | Type | Institution | Currency | Include? | Starting
-> Balance | Current Balance | Normal Sign`) and sum `Current Balance` by `Type`.
+> `DashboardDB1`'s totals. To include them later, sum `Current Balance` by
+> `Type` from that tab (see below).
+
+## Accounts tab — `Accounts`
+
+Read via `?sheet=Accounts` and parsed by `SheetAccountModel.fromGrid`. **Read
+only** — the app never appends to or edits this tab.
+
+| Column | Read by the app? | Notes |
+| :-- | :-- | :-- |
+| `Account Name` | ✅ | Joined against a transaction row's Account column |
+| `Type` | — | |
+| `Institution` | — | |
+| `Currency` | ✅ | ISO code (`KRW`, `USD`); read upper-cased |
+| `Include?` | — | |
+| `Starting Balance` | — | |
+| `Current Balance` | — | The value a future net-worth extension would sum |
+| `Normal Sign` | — | |
+
+The parser **anchors on the header text**, not on column letters: it finds the
+`Account Name` cell, then `Currency` in that same header row, so inserting a
+column does not shift the mapping. If either header is missing the parse yields
+an empty list rather than an error — the tab only supplies labels, so it must
+never break the Transactions page.
+
+**Currency display.** The Transactions list prefixes each row's amount with its
+account's currency — `₩12,500` (no decimals) or `$1,234.56`. An unrecognized
+code is prefixed literally (`EUR 12.5`). When the account is **absent from this
+tab** or its `Currency` cell is **blank**, the amount renders as a bare,
+unlabelled number — the same as before this tab was read at all. An unmarked row
+is therefore a visible hint that the account is missing here.
+
+The sheet mixes currencies in one `Amount` column, so the summary card's
+Spending / Net invested totals still add KRW and USD together. Per-currency
+totals are deliberately not implemented.
 
 ## Account names
-The add-row form's account dropdown is **derived from the sheet** — distinct values
-in the Account column (`accountNamesProvider`). Free-text entry is allowed for new accounts.
+The add-row form's account picker is **derived from the Transactions tab** —
+distinct values in the Account column, most-recently-used first
+(`accountOptionsProvider`). The `Accounts` tab is *not* its source; it only
+supplies currencies.

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../domain/entities/api_call_record.dart';
 import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/result.dart';
+import '../../domain/entities/sheet_account.dart';
 import '../../domain/entities/sheet_transaction.dart';
 import '../../domain/entities/transaction_category.dart';
 import '../../domain/entities/transaction_type.dart';
@@ -39,11 +40,18 @@ class LoggingSheetsRepository implements ISheetsRepository {
       delegate.fetchDashboard();
 
   @override
+  Future<Result<List<SheetAccount>>> fetchAccounts() =>
+      delegate.fetchAccounts();
+
+  @override
   List<SheetTransaction>? cachedTransactions() =>
       delegate.cachedTransactions();
 
   @override
   DashboardSummary? cachedDashboard() => delegate.cachedDashboard();
+
+  @override
+  List<SheetAccount>? cachedAccounts() => delegate.cachedAccounts();
 
   @override
   DateTime? cachedTransactionsAt() => delegate.cachedTransactionsAt();

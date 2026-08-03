@@ -15,8 +15,27 @@ import '../../shared/widgets/updated_at_label.dart';
 import '../../widgets/add_transaction_sheet.dart';
 
 /// Formats a bare number with grouping and up to 2 decimals. No currency
-/// symbol — the sheet stores plain numbers and there is no currency source.
+/// symbol — used for the quantity/price fragment, which is unit-less.
 String _num(double v) => NumberFormat('#,##0.##', 'en_US').format(v);
+
+/// Formats a row's amount, prefixed with its account's currency from the
+/// sheet's `Accounts` tab. A [currency] of null or empty means the sheet does
+/// not say — the amount then renders unlabelled, exactly as it always has, so
+/// an unmarked row is a visible hint that the account is missing from that tab.
+String _money(double v, String? currency) {
+  switch (currency) {
+    case 'KRW':
+      // The won has no minor unit, so decimals would be noise.
+      return '₩${NumberFormat('#,##0', 'en_US').format(v)}';
+    case 'USD':
+      return '\$${_num(v)}';
+    case null || '':
+      return _num(v);
+    default:
+      // An unfamiliar code is still labelled honestly rather than guessed at.
+      return '$currency ${_num(v)}';
+  }
+}
 
 class SheetViewPage extends ConsumerWidget {
   const SheetViewPage({super.key});
@@ -133,6 +152,8 @@ class _TransactionsListState extends ConsumerState<_TransactionsList> {
     final month = ref.watch(selectedMonthProvider);
     final summary = ref.watch(selectedMonthSummaryProvider);
     final txs = ref.watch(selectedMonthTransactionsProvider);
+    // Watched once here, not per tile: the sliver builder is the hot path.
+    final currencies = ref.watch(accountCurrenciesProvider);
 
     // Same `year * 100 + month` convention as MonthGroup.sortKey.
     final key = month.year * 100 + month.month;
@@ -190,6 +211,8 @@ class _TransactionsListState extends ConsumerState<_TransactionsList> {
                     child: _TransactionTile(
                       tx: txs[i],
                       isDark: widget.isDark,
+                      currency:
+                          currencies[txs[i].account.trim().toLowerCase()],
                     ),
                   ),
                 ),
@@ -479,9 +502,17 @@ class _CategoryBar extends StatelessWidget {
 }
 
 class _TransactionTile extends StatelessWidget {
-  const _TransactionTile({required this.tx, required this.isDark});
+  const _TransactionTile({
+    required this.tx,
+    required this.isDark,
+    this.currency,
+  });
   final SheetTransaction tx;
   final bool isDark;
+
+  /// Currency code of [tx]'s account, or null when the sheet's `Accounts` tab
+  /// does not name one.
+  final String? currency;
 
   @override
   Widget build(BuildContext context) {
@@ -581,7 +612,7 @@ class _TransactionTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                _num(tx.computedAmount),
+                _money(tx.computedAmount, currency),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,

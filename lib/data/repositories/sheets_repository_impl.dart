@@ -5,10 +5,12 @@ import 'package:http/http.dart' as http;
 
 import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/result.dart';
+import '../../domain/entities/sheet_account.dart';
 import '../../domain/entities/sheet_transaction.dart';
 import '../../domain/repositories/i_sheets_repository.dart';
 import '../datasources/sheets_local_cache.dart';
 import '../models/dashboard_summary_model.dart';
+import '../models/sheet_account_model.dart';
 import '../models/sheet_transaction_model.dart';
 
 /// Talks to the Google Apps Script web app backing the sheet.
@@ -221,6 +223,73 @@ class SheetsRepositoryImpl implements ISheetsRepository {
       return _parseDashboardBody(body).valueOrNull;
     } catch (e) {
       debugPrint('SheetsRepository.cachedDashboard: $e');
+      return null;
+    }
+  }
+
+  @override
+  Future<Result<List<SheetAccount>>> fetchAccounts() async {
+    if (webAppUrl.isEmpty) {
+      return const Failure(
+          'Google Sheet is not configured. Set the sheet URL in Settings.');
+    }
+
+    try {
+      final uri = Uri.parse(webAppUrl).replace(
+        queryParameters: {
+          'sheet': SheetAccountModel.sheetName,
+          if (apiKey.isNotEmpty) 'apiKey': apiKey,
+        },
+      );
+      final resp = await _get(uri);
+
+      if (resp.statusCode != 200) {
+        return Failure('Sheet returned ${resp.statusCode}: ${resp.body}');
+      }
+      // Apps Script serves its own error pages as HTML with a 200 status.
+      if (resp.body.trimLeft().startsWith('<')) {
+        return const Failure(
+            'Sheet endpoint returned HTML, not JSON. The Apps Script web app '
+            'is likely deployed without a doGet function or an outdated '
+            'version. Redeploy docs/apps_script/Code.gs as a new version with '
+            'access set to "Anyone".');
+      }
+
+      final accounts = _parseAccountsBody(resp.body);
+      cache?.writeAccounts(resp.body);
+      return Success(accounts);
+    } catch (e) {
+      debugPrint('SheetsRepository.fetchAccounts: $e');
+      return Failure(e);
+    }
+  }
+
+  /// Unlike the dashboard, an unusable `Accounts` response is **not** an error:
+  /// the tab only supplies currency labels, so a missing tab or an unexpected
+  /// shape degrades to "no currencies known" (bare amounts) rather than
+  /// breaking the Transactions page.
+  static List<SheetAccount> _parseAccountsBody(String body) {
+    final decoded = jsonDecode(body);
+    if (decoded is! Map<String, dynamic>) return const [];
+    if (decoded['error'] != null) return const [];
+
+    final rawGrid = decoded['grid'];
+    if (rawGrid is! List) return const [];
+    final grid = rawGrid
+        .map<List<dynamic>>((row) => row is List ? row : const [])
+        .toList();
+
+    return SheetAccountModel.fromGrid(grid);
+  }
+
+  @override
+  List<SheetAccount>? cachedAccounts() {
+    final body = cache?.readAccounts();
+    if (body == null) return null;
+    try {
+      return _parseAccountsBody(body);
+    } catch (e) {
+      debugPrint('SheetsRepository.cachedAccounts: $e');
       return null;
     }
   }
