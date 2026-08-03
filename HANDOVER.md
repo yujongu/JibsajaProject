@@ -1,8 +1,122 @@
 # HANDOVER
 
 ## Current Milestone
+**Summary card reworked: currency-scoped totals, income, invested/divested
+(2026-08-03).** Analyzer clean, **108/108 tests**, release APK built.
+**Uncommitted.**
+
+The card showed two stats — Spending and Net invested — that between them had
+four problems. All four were fixed in one pass.
+
+### Context & Decisions
+1. **⭐ The card's totals added KRW and USD into one meaningless number.** The
+   real defect, made visible by the per-row currency work in `0af12d8`: the
+   card's total matched no single row's currency. `summarize()` now splits by
+   currency and emits a `CurrencySummary` per code. **No FX conversion** — the
+   project takes no live rate feeds.
+2. **Sections stack; there is no currency toggle.** The user confirmed a month
+   almost always has exactly one currency, so both layouts collapse to the same
+   thing in the common case. A control seen twice a year is one you've
+   forgotten, and it would hide a second currency behind a tab you'd never think
+   to tap. **The currency header is suppressed when there is only one section** —
+   the ₩/$ prefixes already establish scope — so a normal month's card reads
+   almost exactly like the old one.
+3. **⭐ Safeguard: if *no* row resolves a currency, everything lands in one
+   unlabelled section.** Without this, an unreachable `Accounts` tab (or the
+   window before it loads) would render an all-zeros card — strictly worse than
+   before. Same philosophy as `fetchDashboard`'s missing-`grid` guard: all-zero
+   numbers look like real data. Rows that can't be placed are otherwise excluded
+   and **reported** in a footer note naming the reason.
+4. **Deposits are now Income**, with a `Net flow` (income − spending) caption.
+   They were previously dropped from every total, so a month had no notion of
+   surplus or deficit.
+5. **Net invested split into Invested / Divested**, two positive magnitudes,
+   with the net underneath. Netting alone made a month where you bought ₩800k
+   and sold ₩800k read as a flat zero — indistinguishable from no trading.
+6. **The top-4 category cap is gone; every category with spend gets a bar.**
+   Side benefit: the cap folded its tail into `TransactionCategory.misc`, so a
+   genuine `Misc.` spend and "everything else, small" were indistinguishable.
+   Now `Misc.` means only itself. Categories summing to **zero** are dropped —
+   an empty bar labelled `₩0` is noise.
+7. **Read-only.** No new network call at all; nothing in the POST path touched.
+
+### What shipped
+- **Domain** (`transaction_summary.dart`, substantially rewritten):
+  `TransactionSummary` is now `{List<CurrencySummary> byCurrency, UncountedRows
+  uncounted}`. New `CurrencySummary` (spending, income, invested, divested,
+  per-currency category bars; `netFlow` / `netInvested` / `activity` getters)
+  and `UncountedRows {unknownType, unknownCurrency}`. `summarize()` takes an
+  optional `currencies` map and buckets rows through a private `_Accumulator`
+  that holds the per-type switch. **`_capCategories` deleted** (orphaned by the
+  change; no test covered it).
+- **Domain** (`sheet_account.dart`): `SheetAccount.key(name)` —
+  `trim().toLowerCase()`, the account-join normalization, now defined once and
+  used by all three join sites (provider, `summarize`, the tile lookup).
+- **Presentation** (`sheets_providers.dart`): `selectedMonthSummaryProvider`
+  watches `accountCurrenciesProvider` and passes it to `summarize`, so the card
+  re-splits the moment the Accounts tab lands.
+- **Presentation** (`sheet_view_page.dart`): `_SummaryHeader` now renders one
+  `_CurrencySection` per currency (divided, header only when >1) plus the
+  uncounted note (`_uncountedNote`). New `_NetCaption` for the two net lines.
+  `_CategoryBar` gained a `currency` and prints via `_money` instead of `_num`.
+  The Invested/Divested block is hidden entirely when both are zero, so
+  expense-only months stay as compact as before.
+- **Tests** (+10 → 108): `transaction_summary_test.dart` reworked — existing
+  three moved to `byCurrency.single.…`, plus currency splitting/ordering,
+  the no-currency safeguard, partial knowledge, unmapped transfers not counted,
+  case/space-insensitive account matching, income + net flow, the equal
+  buy/sell case, all-categories-shown, and zero-category omission.
+
+### The 'Gravel' (this session)
+- **Not verified on-device yet.** APK built, not installed.
+- ⚠️ **The card is what the month-switch animation sizes against**
+  (`AnimatedSize`, the 2026-08-02 milestone). Removing the category cap raises
+  its worst case from 5 bars to **12**, and the new Income/Net-flow/Invested
+  rows add height too. Build cost is not the concern (the row list was the
+  bottleneck, not the card) — what to watch for is a longer, more noticeable
+  height animation between months with very different category counts. If it
+  reads badly the lever is the `AnimatedSize` duration/curve, **not** re-adding
+  the cap.
+- **A category that nets negative is dropped along with the zero ones** (the
+  filter is `> 0`). Only reachable if refunds are ever entered as
+  negative-amount expense rows; if that starts happening, the visible bars would
+  no longer sum to Spending.
+- **`totalIncome` sums Deposit amounts as stored.** A negative-Amount Deposit
+  would reduce income rather than being treated as an expense — honest to the
+  sheet, but untested against real data since nothing writes Deposits.
+- **The uncounted note is static text, not a tap target.** It names the reason
+  ("1 account missing from Accounts") but not *which* account — cross-reference
+  the bare-number rows in the list below it.
+- `TransactionSummary.empty` has an empty `byCurrency`, so any consumer must
+  handle a card with no sections (a month with no rows). Only `_SummaryHeader`
+  consumes it today and it iterates, so this is safe by construction.
+- Pre-existing and untouched: dead `groupByMonth()` + `MonthGroup` in
+  `transaction_summary.dart`; the two duplicate `_typeColor` functions; the
+  Gradle KGP deprecation warnings on every APK build.
+
+## Next Immediate Step
+- **Install `build/app/outputs/flutter-apk/app-release.apk`** and open
+  Transactions against the **Real** sheet:
+  - A normal single-currency month shows **no currency header** and reads like
+    the old card, with ₩/$ on every figure.
+  - Spending still equals the sum of its category bars, and **every** category
+    with spend has a bar — no "Other" fold, no empty ₩0 bars.
+  - A month with Deposits shows Income and a Net flow equal to income −
+    spending; a month with trades shows Invested/Divested; an expense-only
+    month hides that block entirely.
+  - If a KRW+USD month exists, both sections appear with headers and their own
+    bars.
+  - The uncounted note, if present, names how many rows and why.
+  - **Month switching still animates acceptably** — especially between months
+    with very different category counts (see Gravel).
+  - **Do not tap Add while verifying** — this change is read-only.
+- Then commit (`transaction_summary.dart`, `sheet_account.dart`,
+  `sheets_providers.dart`, `sheet_view_page.dart`, the two test files,
+  `HANDOVER.md`).
+
+## Previous Milestone
 **Per-row currency from the sheet's `Accounts` tab (2026-08-03).** Analyzer
-clean, **98/98 tests**, release APK built. **Uncommitted.**
+clean, **98/98 tests**, release APK built. **Committed as `0af12d8`, pushed.**
 
 Transaction amounts were bare, unlabelled numbers — a ₩12,500 lunch and a
 $12,500 trade looked identical. Each row's amount now carries its account's
@@ -73,11 +187,9 @@ currency: `₩12,500` / `$1,234.56`.
 ### The 'Gravel' (this session)
 - **Not verified on-device yet.** The APK is built but not installed — see Next
   Immediate Step.
-- **The summary card still adds KRW and USD into one Spending / Net invested
-  number.** Pre-existing and explicitly out of scope this session, but the row
-  currencies now make the mismatch *visible*: a card total no longer matches any
-  single currency's rows. The parked decision (from June) if you resume it:
-  separate line per currency, **no FX conversion**.
+- ~~The summary card still adds KRW and USD into one Spending / Net invested
+  number.~~ **Resolved by the current milestone** — that gravel note is what
+  prompted it.
 - **This adds a third GET on the Transactions page** (`?sheet=Accounts`). It is
   cache-first, so it never blocks first paint, and its label
   (`'accountsProvider'`) is *not* what the syncing bar watches
@@ -103,9 +215,8 @@ currency: `₩12,500` / `$1,234.56`.
   wrong (it shipped as `942182b`), and its gravel item about
   `currency_formatter.dart` is moot — that file no longer exists.
 
-## Next Immediate Step
-- **Install `build/app/outputs/flutter-apk/app-release.apk`** and open
-  Transactions against the **Real** sheet:
+### Next steps (carried over — still not verified on-device)
+- Open Transactions against the **Real** sheet:
   - KRW accounts show `₩` with no decimals; USD accounts (e.g. 토스증권 달러,
     토스증권 해외 주식) show `$`.
   - Both legs of a Buy/Sell pair show the same symbol when the cash and

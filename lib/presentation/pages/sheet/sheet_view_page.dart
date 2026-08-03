@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../domain/entities/sheet_account.dart';
 import '../../../domain/entities/sheet_transaction.dart';
 import '../../../domain/entities/transaction_category.dart';
 import '../../../domain/entities/transaction_summary.dart';
@@ -212,7 +213,7 @@ class _TransactionsListState extends ConsumerState<_TransactionsList> {
                       tx: txs[i],
                       isDark: widget.isDark,
                       currency:
-                          currencies[txs[i].account.trim().toLowerCase()],
+                          currencies[SheetAccount.key(txs[i].account)],
                     ),
                   ),
                 ),
@@ -322,8 +323,6 @@ class _SummaryHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final netIsNegative = summary.netInvested < 0;
-
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -346,48 +345,218 @@ class _SummaryHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          for (final (i, cs) in summary.byCurrency.indexed) ...[
+            if (i > 0) ...[
+              const SizedBox(height: 18),
+              Divider(
+                height: 1,
+                thickness: 0.5,
+                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+              ),
+              const SizedBox(height: 18),
+            ],
+            _CurrencySection(
+              summary: cs,
+              // With one currency the ₩/$ prefixes already establish scope, so
+              // a header would just be noise. It earns its place only when
+              // there are two sections to tell apart.
+              showHeader: summary.byCurrency.length > 1,
+              isDark: isDark,
+            ),
+          ],
+          if (!summary.uncounted.isEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              _uncountedNote(summary.uncounted),
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark
+                    ? AppColors.textTertiary
+                    : AppColors.textTertiaryLight,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// "2 rows not counted — 1 unrecognized type, 1 account missing from Accounts".
+/// Names the reason so the line points at what to fix in the sheet.
+String _uncountedNote(UncountedRows u) {
+  final reasons = <String>[
+    if (u.unknownType > 0) '${u.unknownType} unrecognized type',
+    if (u.unknownCurrency > 0)
+      '${u.unknownCurrency} account missing from Accounts',
+  ];
+  final rows = u.total == 1 ? '1 row' : '${u.total} rows';
+  return '$rows not counted — ${reasons.join(', ')}';
+}
+
+/// One currency's stats and category breakdown.
+class _CurrencySection extends StatelessWidget {
+  const _CurrencySection({
+    required this.summary,
+    required this.showHeader,
+    required this.isDark,
+  });
+
+  final CurrencySummary summary;
+  final bool showHeader;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final code = summary.currency;
+    final hasTrades = summary.invested != 0 || summary.divested != 0;
+    final tertiary =
+        isDark ? AppColors.textTertiary : AppColors.textTertiaryLight;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showHeader) ...[
+          Text(
+            code ?? '—',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: isDark
+                  ? AppColors.textSecondary
+                  : AppColors.textSecondaryLight,
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        Row(
+          children: [
+            Expanded(
+              child: _StatBlock(
+                label: 'Spending',
+                value: _money(summary.totalSpending, code),
+                valueColor: AppColors.negative,
+                isDark: isDark,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatBlock(
+                label: 'Income',
+                value: _money(summary.totalIncome, code),
+                valueColor: AppColors.positive,
+                isDark: isDark,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _NetCaption(
+          label: 'Net flow',
+          value: summary.netFlow,
+          currency: code,
+          // A month that spent more than it took in is the negative case.
+          negativeColor: AppColors.negative,
+          isDark: isDark,
+        ),
+        // Expense-only months — the common case — skip this block entirely
+        // rather than showing two zeros.
+        if (hasTrades) ...[
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
                 child: _StatBlock(
-                  label: 'Spending',
-                  value: _num(summary.totalSpending),
-                  valueColor: AppColors.negative,
+                  label: 'Invested',
+                  value: _money(summary.invested, code),
+                  valueColor: AppColors.primary,
                   isDark: isDark,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _StatBlock(
-                  label: 'Net invested',
-                  value: _num(summary.netInvested),
-                  valueColor:
-                      netIsNegative ? AppColors.warning : AppColors.positive,
+                  label: 'Divested',
+                  value: _money(summary.divested, code),
+                  valueColor: AppColors.warning,
                   isDark: isDark,
                 ),
               ),
             ],
           ),
-          if (summary.spendingByCategory.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            Text(
-              'Spending by category',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isDark
-                    ? AppColors.textTertiary
-                    : AppColors.textTertiaryLight,
-              ),
+          const SizedBox(height: 8),
+          _NetCaption(
+            label: 'Net',
+            value: summary.netInvested,
+            currency: code,
+            negativeColor: AppColors.warning,
+            isDark: isDark,
+          ),
+        ],
+        if (summary.spendingByCategory.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          Text(
+            'Spending by category',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: tertiary,
             ),
+          ),
+          const SizedBox(height: 10),
+          for (final cs in summary.spendingByCategory) ...[
+            _CategoryBar(spending: cs, currency: code, isDark: isDark),
             const SizedBox(height: 10),
-            for (final cs in summary.spendingByCategory) ...[
-              _CategoryBar(spending: cs, isDark: isDark),
-              const SizedBox(height: 10),
-            ],
           ],
         ],
-      ),
+      ],
+    );
+  }
+}
+
+/// A small "Net flow  +₩897,700" line under a pair of stats.
+class _NetCaption extends StatelessWidget {
+  const _NetCaption({
+    required this.label,
+    required this.value,
+    required this.currency,
+    required this.negativeColor,
+    required this.isDark,
+  });
+
+  final String label;
+  final double value;
+  final String? currency;
+  final Color negativeColor;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final isNegative = value < 0;
+    // _money formats the magnitude; the sign is carried explicitly so the
+    // symbol stays next to the digits ("+₩100", not "₩+100").
+    final sign = isNegative ? '−' : '+';
+    return Row(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: isDark
+                ? AppColors.textTertiary
+                : AppColors.textTertiaryLight,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '$sign${_money(value.abs(), currency)}',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: isNegative ? negativeColor : AppColors.positive,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -438,8 +607,15 @@ class _StatBlock extends StatelessWidget {
 
 /// Label + proportional bar + amount for one category's share of spending.
 class _CategoryBar extends StatelessWidget {
-  const _CategoryBar({required this.spending, required this.isDark});
+  const _CategoryBar({
+    required this.spending,
+    required this.currency,
+    required this.isDark,
+  });
   final CategorySpending spending;
+
+  /// Currency of the section this bar belongs to.
+  final String? currency;
   final bool isDark;
 
   @override
@@ -472,7 +648,7 @@ class _CategoryBar extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              _num(spending.amount),
+              _money(spending.amount, currency),
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,

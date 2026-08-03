@@ -155,7 +155,7 @@ final accountCurrenciesProvider = Provider<Map<String, String>>((ref) {
   final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
   return {
     for (final a in accounts)
-      if (a.currency.isNotEmpty) a.name.trim().toLowerCase(): a.currency,
+      if (a.currency.isNotEmpty) SheetAccount.key(a.name): a.currency,
   };
 });
 
@@ -244,7 +244,10 @@ final monthNavProvider = Provider<({bool canGoBack, bool canGoForward})>((ref) {
 final selectedMonthSummaryProvider = Provider<TransactionSummary>((ref) {
   final txs = ref.watch(transactionsProvider).valueOrNull ?? const [];
   final month = ref.watch(selectedMonthProvider);
-  return txs.inMonth(month.year, month.month).summarize();
+  // Watching the currencies means the card re-splits the moment the Accounts
+  // tab lands, rather than staying stuck on the unlabelled fallback.
+  final currencies = ref.watch(accountCurrenciesProvider);
+  return txs.inMonth(month.year, month.month).summarize(currencies: currencies);
 });
 
 /// The selected month's rows, newest first — the source list is already sorted

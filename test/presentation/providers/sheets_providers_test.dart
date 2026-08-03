@@ -242,7 +242,7 @@ void main() {
       container.read(selectedMonthProvider.notifier).shift(-1);
 
       expect(container.read(selectedMonthTransactionsProvider), isEmpty);
-      expect(container.read(selectedMonthSummaryProvider).totalSpending, 0);
+      expect(container.read(selectedMonthSummaryProvider).byCurrency, isEmpty);
       // Still navigable in both directions — never a dead end.
       final nav = container.read(monthNavProvider);
       expect(nav.canGoBack, isTrue);
@@ -252,14 +252,21 @@ void main() {
     test('summary and rows follow the selected month into the past', () async {
       final container = await loaded(sample());
 
-      // Current month first.
-      expect(container.read(selectedMonthSummaryProvider).totalSpending, 100);
+      // Current month first. No accounts are configured on the fake repo, so
+      // the summary falls back to a single unlabelled section.
+      expect(
+          container.read(selectedMonthSummaryProvider).byCurrency.single
+              .totalSpending,
+          100);
       expect(container.read(selectedMonthTransactionsProvider).single.account,
           'NOW');
 
       container.read(selectedMonthProvider.notifier).shift(-2);
 
-      expect(container.read(selectedMonthSummaryProvider).totalSpending, 50);
+      expect(
+          container.read(selectedMonthSummaryProvider).byCurrency.single
+              .totalSpending,
+          50);
       expect(container.read(selectedMonthTransactionsProvider).single.account,
           'OLD');
     });

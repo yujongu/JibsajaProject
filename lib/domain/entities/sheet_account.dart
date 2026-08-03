@@ -13,4 +13,9 @@ class SheetAccount {
   /// ISO code from the sheet's Currency cell ('KRW', 'USD'), or empty when the
   /// cell is blank — an unknown currency renders as a bare, unlabelled amount.
   final String currency;
+
+  /// Lookup key for joining a transaction's Account column against this tab.
+  /// Defined once so every join normalizes identically; absorbs whitespace and
+  /// case drift between the two tabs, nothing more.
+  static String key(String accountName) => accountName.trim().toLowerCase();
 }
