@@ -3,11 +3,11 @@
 ## Current Milestone
 **Summary card reworked: currency-scoped totals, income, invested/divested
 (2026-08-03).** Analyzer clean, **112/112 tests**, release APK built.
-**Uncommitted.**
+**Committed as `e90635e`, pushed.**
 
 > **Follow-up fix, same day:** an empty month rendered the card as a **circle**.
-> See "Empty-month card" below — the fix is committed to the working tree and
-> the APK above **predates it**, so rebuild before verifying on-device.
+> See "Empty-month card" below — **committed as `84f50d0`, pushed**. The APK
+> above **predates it**, so rebuild before verifying on-device.
 
 The card showed two stats — Spending and Net invested — that between them had
 four problems. All four were fixed in one pass.
@@ -174,9 +174,9 @@ A month with no transactions rendered the summary card as a **small circle**.
   - **Month switching still animates acceptably** — especially between months
     with very different category counts (see Gravel).
   - **Do not tap Add while verifying** — this change is read-only.
-- Then commit (`transaction_summary.dart`, `sheet_account.dart`,
-  `sheets_providers.dart`, `sheet_view_page.dart`, the two test files,
-  `HANDOVER.md`).
+- ~~Then commit.~~ **Done** — shipped as `e90635e` (`transaction_summary.dart`,
+  `sheet_account.dart`, `sheets_providers.dart`, `sheet_view_page.dart`, the two
+  test files). Only the on-device verification above is still outstanding.
 
 ## Previous Milestone
 **Per-row currency from the sheet's `Accounts` tab (2026-08-03).** Analyzer
