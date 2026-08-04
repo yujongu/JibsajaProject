@@ -123,4 +123,28 @@ void main() {
     expect(find.text('₩1,200'), findsWidgets);
     expect(find.text('Spending by category'), findsOneWidget);
   });
+
+  testWidgets('a sell-only month shows Sold with no net line', (tester) async {
+    final now = DateTime.now();
+    await _pumpPage(tester, [
+      SheetTransaction(
+        date: DateTime(now.year, now.month, 1),
+        account: 'BoA',
+        type: TransactionType.sell,
+        quantity: -8,
+        price: 100000,
+        amount: -800000,
+        rowIndex: 0,
+      ),
+    ]);
+
+    // Sell proceeds are cash in, reported as a positive magnitude.
+    expect(find.text('Sold'), findsOneWidget);
+    expect(find.text('₩800,000'), findsOneWidget);
+    expect(find.text('Invested'), findsOneWidget);
+    // Only the cash-flow caption remains; the trade net that used to echo
+    // Sold back as −₩800,000 is gone. 'Net flow' is a distinct string.
+    expect(find.text('Net'), findsNothing);
+    expect(find.text('Net flow'), findsOneWidget);
+  });
 }

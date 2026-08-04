@@ -67,9 +67,6 @@ class CurrencySummary {
   /// Cash in minus cash out: positive means the month ran a surplus.
   double get netFlow => totalIncome - totalSpending;
 
-  /// Buys minus sell proceeds — the old single "Net invested" figure.
-  double get netInvested => invested - divested;
-
   /// How much happened in this currency at all; orders the sections so the
   /// dominant currency leads.
   double get activity => totalSpending + totalIncome + invested + divested;

@@ -1,6 +1,112 @@
 # HANDOVER
 
 ## Current Milestone
+**Trade "Net" line removed; Divested is now "Sold" and reads as cash in
+(2026-08-04).** Analyzer clean, **113/113 tests**, release APK built.
+**Uncommitted.**
+
+The user's report: buying makes `Invested` climb (wanted), but selling makes
+`Divested` climb *and* drives the `Net` line to the exact negation of it — a
+red-looking number that is nothing but an echo of the line above.
+
+### Context & Decisions
+1. **⭐ The defect was the subtraction, not the two stats.**
+   `netInvested = invested − divested` treated a Sell as the cancellation of a
+   Buy. It isn't: sell proceeds carry whatever the position gained or lost, so
+   the difference is neither cash, nor capital deployed, nor P/L — a hybrid of
+   all three. In a sell-only month it degenerates to exactly `−divested`, which
+   is precisely what the user was looking at. **The fix is to delete the number,
+   not to relabel it.** The two gross magnitudes above it were already honest.
+2. **Selling was flagged as bad twice.** `Divested` was amber
+   (`AppColors.warning`) *and* the Net caption colored its negative case amber.
+   Money leaving the market is the one unambiguously cash-**positive** event on
+   the card. It is now green — the same `AppColors.positive` Income uses.
+3. **The card's color language is now coherent**: red = cash consumed
+   (Spending), green = cash in (Income, Sold), blue = cash deployed but *not*
+   consumed (Invested). That last distinction is the point of keeping Invested a
+   separate color rather than folding it in with Spending.
+4. **Labels: `Invested` / `Sold`** (user's pick over `Bought`/`Sold` and over
+   leaving both). "Invested" stays because watching it climb is the behavior the
+   user explicitly said they liked; "Divested" was the jargon half.
+5. **Two lines both labelled "Net" are now one.** `Net flow` (income − spending)
+   survives unchanged and is no longer ambiguous, since nothing else on the card
+   is called Net.
+6. **Three richer alternatives were considered and set aside** (see the plan
+   file `~/.claude/plans/currently-the-invested-and-ethereal-kettle.md`):
+   - *A unified monthly cash bottom line* (`income − spending + divested −
+     invested`) — arithmetically the most meaningful single figure, and it makes
+     a sell positive automatically. Rejected as a bigger structural change than
+     the complaint warranted.
+   - *Realized gain/loss per sale* — the number the user probably wants
+     eventually ("sold ₩800,000 at a +₩120,000 gain"). Every ingredient exists
+     in the rows (ticker, signed qty, price, account→currency), but it needs a
+     full-history per-ticker cost-basis pass (not `inMonth`), an
+     average-cost-vs-FIFO decision, and it would **lie silently** for any
+     position opened before the sheet's history begins. Its own milestone.
+   - *Dropping trades from the monthly card entirely* — conflicts with
+     decision 4.
+7. **Read-only.** No network call, no POST path, no sheet contract touched.
+
+### What shipped
+- **Domain** (`transaction_summary.dart`): **`netInvested` getter deleted** —
+  its only `lib/` consumer was the caption being removed. `divested` keeps its
+  field name; renaming it to `sold` would ripple through the entity,
+  `_Accumulator`, `CurrencySummary.zero`, `activity` and the tests for what is a
+  display-label change. Its doc comment already carries the rationale, which
+  this change *strengthens* rather than invalidates.
+- **Presentation** (`sheet_view_page.dart`): `_CurrencySection` — the second
+  `_StatBlock` is now `label: 'Sold'` / `valueColor: AppColors.positive`; the
+  trailing `SizedBox` + second `_NetCaption` are gone. `_NetCaption` lost its
+  `negativeColor` field and param (one call site remained, all passing
+  `AppColors.negative`), which is now used directly.
+- **Tests** (+1 → 113): four `netInvested` assertions in
+  `transaction_summary_test.dart` rewritten — two dropped as redundant with the
+  `invested`/`divested` assertions beside them (including in the test literally
+  named *"a buy and sell of equal size read as activity, not a zero"*, which the
+  removal strengthens), two replaced with explicit `invested == 0` /
+  `divested == 0`. One test renamed off the dead getter. New widget test in
+  `sheet_view_page_test.dart`: a **sell-only month** renders `Sold` / `₩800,000`
+  / `Invested`, `find.text('Net')` finds **nothing**, and `Net flow` survives.
+
+### The 'Gravel' (this session)
+- **Not verified on-device yet.** APK built, not installed — see Next Immediate
+  Step.
+- **`CurrencySummary.divested` is displayed as "Sold".** Deliberate (decision
+  above) but it is real name drift between domain and UI. If a third consumer of
+  the field ever appears, that is the moment to rename the field.
+- **The card is one line shorter in trade months.** The `AnimatedSize`
+  month-switch transition sizes against this card; the delta is small (one 12px
+  caption row) but it is a height change between a trade month and an
+  expense-only one. Watch it on-device.
+- **The sell-only widget test asserts `find.text('Net')` findsNothing**, which
+  passes only because `'Net flow'` is a distinct string from `'Net'`. If the
+  cash caption is ever renamed to plain `Net`, that assertion silently inverts
+  its meaning. It is guarded by the `Net flow` assertion on the next line.
+- **A month with trades still has no bottom line at all** — two gross numbers
+  and nothing tying them together. That is the intended outcome here, but it is
+  also exactly the gap the "unified cash bottom line" alternative would fill if
+  the card ever feels unfinished.
+- Pre-existing and untouched: dead `groupByMonth()` + `MonthGroup` in
+  `transaction_summary.dart`; the two duplicate `_typeColor` functions; the
+  unused `currency_formatter.dart`; the Gradle KGP deprecation warnings on every
+  APK build; `_NetCaption` still renders a zero net flow as `+0`.
+
+## Next Immediate Step
+- **Install `build/app/outputs/flutter-apk/app-release.apk`** and open
+  Transactions against the **Real** sheet:
+  - A **sell-only month** — the case that prompted this — reads `Invested ₩0`
+    and `Sold ₩800,000` **in green**, with **no line underneath**.
+  - A **buy-only month**: `Invested` climbs in blue, `Sold ₩0`, no net line.
+  - A month with **both**: two stats, neither cancelling the other.
+  - An **expense-only month**: the trade block is still hidden entirely, and
+    `Net flow` is still present and still red when negative.
+  - **Month switching still animates acceptably** across the new height (see
+    Gravel).
+  - **Do not tap Add while verifying** — this change is read-only.
+- Then commit: `transaction_summary.dart`, `sheet_view_page.dart`,
+  `transaction_summary_test.dart`, `sheet_view_page_test.dart`, `HANDOVER.md`.
+
+## Previous Milestone
 **Summary card reworked: currency-scoped totals, income, invested/divested
 (2026-08-03).** Analyzer clean, **112/112 tests**, release APK built.
 **Committed as `e90635e`, pushed.**

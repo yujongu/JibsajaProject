@@ -68,7 +68,7 @@ void main() {
   });
 
   group('summarize', () {
-    test('netInvested sums signed trade amounts; transfers are excluded', () {
+    test('trade amounts land in invested/divested; transfers are excluded', () {
       final txs = [
         // Buy leg pair: Transfer −1500 + Buy +1500.
         _tx(
@@ -97,7 +97,6 @@ void main() {
       final s = txs.summarize(currencies: _krw).byCurrency.single;
       expect(s.invested, 1500);
       expect(s.divested, 550);
-      expect(s.netInvested, 950); // 1500 − 550
       expect(s.totalSpending, 0); // transfers/trades are not spending
     });
 
@@ -118,7 +117,6 @@ void main() {
       final s = txs.summarize(currencies: _krw).byCurrency.single;
       expect(s.invested, 800000);
       expect(s.divested, 800000);
-      expect(s.netInvested, 0);
     });
 
     test('deposits become income, staying out of spending and categories', () {
@@ -134,7 +132,8 @@ void main() {
       expect(s.totalSpending, 30);
       expect(s.totalIncome, 3000);
       expect(s.netFlow, 2970); // 3000 in − 30 out
-      expect(s.netInvested, 0);
+      expect(s.invested, 0);
+      expect(s.divested, 0);
       expect(s.spendingByCategory, hasLength(1));
       expect(s.spendingByCategory.single.category, TransactionCategory.food);
       expect(s.spendingByCategory.single.amount, 30);
@@ -164,7 +163,8 @@ void main() {
       final summary = txs.summarize(currencies: _krw);
       final s = summary.byCurrency.single;
       expect(s.totalSpending, 30);
-      expect(s.netInvested, 0);
+      expect(s.invested, 0);
+      expect(s.divested, 0);
       expect(s.spendingByCategory, hasLength(1));
       expect(summary.uncounted.unknownType, 1);
       expect(summary.uncounted.total, 1);

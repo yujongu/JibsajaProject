@@ -464,8 +464,6 @@ class _CurrencySection extends StatelessWidget {
           label: 'Net flow',
           value: summary.netFlow,
           currency: code,
-          // A month that spent more than it took in is the negative case.
-          negativeColor: AppColors.negative,
           isDark: isDark,
         ),
         // Expense-only months — the common case — skip this block entirely
@@ -485,21 +483,14 @@ class _CurrencySection extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _StatBlock(
-                  label: 'Divested',
+                  label: 'Sold',
+                  // Cash arriving, same as Income — not a warning.
                   value: _money(summary.divested, code),
-                  valueColor: AppColors.warning,
+                  valueColor: AppColors.positive,
                   isDark: isDark,
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 8),
-          _NetCaption(
-            label: 'Net',
-            value: summary.netInvested,
-            currency: code,
-            negativeColor: AppColors.warning,
-            isDark: isDark,
           ),
         ],
         if (summary.spendingByCategory.isNotEmpty) ...[
@@ -529,14 +520,12 @@ class _NetCaption extends StatelessWidget {
     required this.label,
     required this.value,
     required this.currency,
-    required this.negativeColor,
     required this.isDark,
   });
 
   final String label;
   final double value;
   final String? currency;
-  final Color negativeColor;
   final bool isDark;
 
   @override
@@ -562,7 +551,8 @@ class _NetCaption extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: isNegative ? negativeColor : AppColors.positive,
+            // A month that spent more than it took in is the negative case.
+            color: isNegative ? AppColors.negative : AppColors.positive,
           ),
         ),
       ],
