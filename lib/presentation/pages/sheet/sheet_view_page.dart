@@ -598,7 +598,7 @@ class _CategoryBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cat = spending.category;
-    final color = cat.color;
+    final color = cat.color(isDark);
     final trackColor =
         isDark ? AppColors.darkBorder : AppColors.surfaceContainerLow;
 
@@ -669,9 +669,14 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _typeColor(tx.type);
     final isPurchase = tx.type == TransactionType.purchase;
     final cat = tx.category;
+    // A purchase is colored by its category, not by its type — otherwise every
+    // expense on screen is the same red. Uncategorized rows fall back to Misc.,
+    // which is where the month summary buckets them too.
+    final color = isPurchase
+        ? (cat ?? TransactionCategory.misc).color(isDark)
+        : _typeColor(tx.type);
 
     final title = switch (tx.type) {
       TransactionType.purchase => tx.description.isNotEmpty

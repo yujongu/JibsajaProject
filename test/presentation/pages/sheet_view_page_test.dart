@@ -5,6 +5,7 @@ import 'package:jibsaja/domain/entities/sheet_account.dart';
 import 'package:jibsaja/domain/entities/sheet_transaction.dart';
 import 'package:jibsaja/domain/entities/transaction_category.dart';
 import 'package:jibsaja/domain/entities/transaction_type.dart';
+import 'package:jibsaja/presentation/extensions/transaction_category_ui.dart';
 import 'package:jibsaja/presentation/pages/sheet/sheet_view_page.dart';
 import 'package:jibsaja/presentation/providers/sheets_providers.dart';
 
@@ -147,4 +148,49 @@ void main() {
     expect(find.text('Net'), findsNothing);
     expect(find.text('Net flow'), findsOneWidget);
   });
+
+  testWidgets('purchase rows are colored by category, not by type',
+      (tester) async {
+    final now = DateTime.now();
+    await _pumpPage(tester, [
+      SheetTransaction(
+        date: DateTime(now.year, now.month, 1),
+        account: 'BoA',
+        type: TransactionType.purchase,
+        category: TransactionCategory.food,
+        description: 'Lunch',
+        amount: -1200,
+        rowIndex: 0,
+      ),
+      SheetTransaction(
+        date: DateTime(now.year, now.month, 1),
+        account: 'BoA',
+        type: TransactionType.purchase,
+        category: TransactionCategory.wedding,
+        description: 'Venue',
+        amount: -5000,
+        rowIndex: 1,
+      ),
+    ]);
+
+    final food = _tileIconColor(tester, Icons.restaurant_rounded);
+    final wedding = _tileIconColor(tester, Icons.favorite_rounded);
+
+    // Both used to be AppColors.negative, which is what made a month of
+    // spending unreadable without squinting at the icons.
+    expect(food, TransactionCategory.food.color(false));
+    expect(wedding, TransactionCategory.wedding.color(false));
+    expect(food, isNot(wedding));
+  });
+}
+
+/// Color of the 20px leading icon in a transaction row. The summary card's
+/// category bars draw the same [IconData] at 14px, so the size disambiguates.
+Color _tileIconColor(WidgetTester tester, IconData data) {
+  final icons = tester
+      .widgetList<Icon>(find.byIcon(data))
+      .where((i) => i.size == 20)
+      .toList();
+  expect(icons, hasLength(1));
+  return icons.single.color!;
 }

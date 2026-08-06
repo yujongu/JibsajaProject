@@ -20,20 +20,34 @@ extension TransactionCategoryUi on TransactionCategory {
     }
   }
 
-  Color get color {
+  /// One hue per category, spread across the wheel so no two are confusable.
+  /// The dark value is the lighter of the pair — it sits on the navy card.
+  Color color(bool isDark) {
     switch (this) {
-      case TransactionCategory.monthly:     return const Color(0xFF6366F1);
-      case TransactionCategory.transport:   return const Color(0xFF3B82F6);
-      case TransactionCategory.food:        return const Color(0xFFF97316);
-      case TransactionCategory.necessities: return const Color(0xFF10B981);
-      case TransactionCategory.clothing:    return const Color(0xFFEC4899);
-      case TransactionCategory.fun:         return const Color(0xFF8B5CF6);
-      case TransactionCategory.delivery:    return const Color(0xFFF59E0B);
-      case TransactionCategory.misc:        return const Color(0xFF94A3B8);
-      case TransactionCategory.work:        return const Color(0xFF06B6D4);
-      case TransactionCategory.event:       return const Color(0xFFEF4444);
-      case TransactionCategory.wedding:     return const Color(0xFFF43F5E);
-      case TransactionCategory.travel:      return const Color(0xFF14B8A6);
+      case TransactionCategory.monthly: // indigo
+        return isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5);
+      case TransactionCategory.transport: // sky
+        return isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7);
+      case TransactionCategory.food: // orange
+        return isDark ? const Color(0xFFFB923C) : const Color(0xFFEA580C);
+      case TransactionCategory.necessities: // green
+        return isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A);
+      case TransactionCategory.clothing: // pink
+        return isDark ? const Color(0xFFF472B6) : const Color(0xFFDB2777);
+      case TransactionCategory.fun: // violet
+        return isDark ? const Color(0xFFA78BFA) : const Color(0xFF7C3AED);
+      case TransactionCategory.delivery: // yellow
+        return isDark ? const Color(0xFFFACC15) : const Color(0xFFCA8A04);
+      case TransactionCategory.misc: // slate
+        return isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+      case TransactionCategory.work: // lime
+        return isDark ? const Color(0xFFA3E635) : const Color(0xFF65A30D);
+      case TransactionCategory.event: // red
+        return isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
+      case TransactionCategory.wedding: // fuchsia
+        return isDark ? const Color(0xFFE879F9) : const Color(0xFFC026D3);
+      case TransactionCategory.travel: // teal
+        return isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0D9488);
     }
   }
 }

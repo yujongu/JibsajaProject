@@ -1,8 +1,119 @@
 # HANDOVER
 
 ## Current Milestone
+**Expense rows are colored by category, not by type (2026-08-06).** Analyzer
+clean, **136/136 tests**. **Committed on `main`**, directly on top of the
+Accounts tab below (`e653ed2`), which shipped in the same session.
+
+The user's report: "the icons are good, but it is hard to get a grasp when all
+expenses are red." Correct — `_TransactionTile` took its color from
+`_typeColor(tx.type)`, and every `TransactionType.purchase` maps to
+`AppColors.negative`. The category only ever reached the icon. A month of
+spending was one undifferentiated red block, so the 20px icon was the sole
+signal separating 식비 from 웨딩.
+
+A category palette **already existed** (`TransactionCategoryUi.color`) but was
+consumed only by the summary bars and the Add-sheet chips — never by the list.
+
+### Context & Decisions
+1. **⭐ The palette was replaced, not just wired up.** The old twelve
+   Tailwind-500 values collided badly: 경조사 / 웨딩 / 의류 all sat within 30°
+   of red, and 식비 / 배달음식 were both orange-amber. Wiring those into the
+   list would have swapped "all red" for "mostly red" — the complaint would have
+   survived the fix. The new set spreads twelve hues 25–45° apart:
+   red · orange · yellow · lime · green · teal · sky · indigo · violet ·
+   fuchsia · pink, with slate for `Misc.`
+2. **⭐ `color` is now a method taking `isDark`, not a getter.** The old values
+   were mode-agnostic, which is why 배달음식 amber and Misc. slate washed out on
+   the white card. Each category now carries a darker light-mode value and a
+   lighter dark-mode one. `isDark` was already in scope at every call site — the
+   codebase threads it as a constructor arg rather than reading `ColorScheme` —
+   so this cost nothing at the call sites.
+3. **The values stay in `transaction_category_ui.dart`, not `AppColors`.**
+   They are category identity, not semantic tokens; `AppColors` holds the
+   positive/negative/warning language the trade rows still use.
+4. **Uncategorized purchases fall back to `misc` slate, not red.**
+   `transaction_summary.dart:157` already buckets a category-less purchase into
+   `Misc.` when aggregating, so the row and its summary bar now agree.
+5. **Badge text and row geometry unchanged** (both user's pick over the
+   alternatives shown in the mockup). The badge still reads "Purchase" — it just
+   takes the category color — and no edge stripe was added. The icon tile and
+   badge were already driven by the single `color` local, so the whole visual
+   change is one expression.
+6. **Trades are untouched.** `_typeColor` keeps all six cases and still colors
+   Buy / Sell / Transfer / Deposit / unknown. Only the purchase branch is
+   bypassed.
+7. **Read-only.** No sheet contract, no network, no POST path.
+
+### What shipped
+- **Presentation** (`extensions/transaction_category_ui.dart`): `Color get color`
+  → `Color color(bool isDark)`, twelve cases in enum-declaration order (matching
+  the `icon` getter above it) with a hue name comment per case.
+- **Presentation** (`sheet_view_page.dart`): `_TransactionTile` resolves
+  `isPurchase` / `cat` before the color and branches —
+  `isPurchase ? (cat ?? TransactionCategory.misc).color(isDark) : _typeColor(...)`.
+  `_CategoryBar` passes `isDark` through.
+- **Presentation** (`add_transaction_sheet.dart`): `_CategoryGrid` hoists a
+  `catColor` local; its four `cat.color` references now read from it.
+- **Tests** (+4 → 136): new
+  `test/presentation/extensions/transaction_category_ui_test.dart` — every
+  category has a distinct light color, a distinct dark color, and the two modes
+  differ per category. New case in `sheet_view_page_test.dart`: a month with a
+  식비 purchase and a 웨딩 purchase render two 20px tile icons in different,
+  palette-matching colors.
+
+### The 'Gravel' (this session)
+- **Not verified on-device.** No APK was built this session. The whole point of
+  the change is how it *looks*, and that is unjudged — see Next Immediate Step.
+- **The distinctness test compares exact `Color` values, not perceived
+  difference.** Two categories one hex apart would pass it. It catches the
+  regression that actually happened before (literal duplicates and near-clones
+  in the same family), not a subtle one.
+- **`_tileIconColor` in the widget test disambiguates by `size == 20`**, because
+  the summary card's category bars draw the same `IconData` at 14px. If the tile
+  icon size ever changes, that helper fails with "expected 1 element" rather
+  than anything descriptive.
+- **`AppColors.negative` is now unreachable for purchase rows** but stays in
+  `_typeColor`'s switch, which must remain exhaustive over `TransactionType`.
+  The analyzer does not flag it.
+- **The old palette's colors are gone with no migration note.** Anyone who had
+  learned the previous chip colors in the Add sheet sees them all change at
+  once — deliberate, but it is a visible break for a user who had memorized them.
+- Pre-existing and untouched: dead `groupByMonth()` + `MonthGroup` in
+  `transaction_summary.dart`; dead `currency_formatter.dart`; the two duplicate
+  `_typeColor` functions (this change touched only the `sheet_view_page.dart`
+  one's caller, not the duplication itself); `_NetCaption` still renders a zero
+  net flow as `+0`.
+
+## Next Immediate Step
+- **`flutter build apk`, install, and open Transactions** against the **Real**
+  sheet — this change is entirely visual and nothing above substitutes for
+  looking at it:
+  - ⭐ **A month of mixed spending reads as distinct colors**, and you can tell
+    two rows apart without looking at the icons. That is the whole acceptance
+    criterion.
+  - Each row's "Purchase" badge matches its icon tile.
+  - **The summary card's category bars match the rows below them** — same
+    palette, one source.
+  - The Add Transaction sheet's category chips match too.
+  - Buy / Sell / Transfer / Deposit rows are **unchanged** (blue / amber / cyan /
+    green).
+  - **Toggle the OS between light and dark** (`ThemeMode.system`, `main.dart:41`)
+    and check nothing washes out on white or glares on navy — **배달음식 yellow
+    and Misc. slate** are the two to look at.
+  - **Do not tap Add while verifying** — read-only.
+- The palette mockup the user chose Option B from:
+  https://claude.ai/code/artifact/a12a997e-6406-48aa-968e-c37ad7f5dadf
+- **The same APK settles two older milestones' checks too** — both are committed,
+  neither has been looked at on a device: the **Accounts tab** pass below
+  (balances match column G sign-and-all; no Brokerage or Crypto rows; a blank
+  balance shows —; Transactions amounts still carry ₩ / $), and the sell-only /
+  buy-only month checks from the milestone before it.
+
+## Previous Milestone
 **New Accounts tab — credit-card debt and bank balances (2026-08-06).** Analyzer
-clean, **132/132 tests**, release APK built. **Uncommitted.**
+clean, **132/132 tests**, release APK built. **Committed as `e653ed2`** —
+verified green in isolation before the palette work was stacked on it.
 
 The app had two tabs. Card debt and bank cash were invisible in it: the sheet's
 `Accounts` tab was already fetched on every launch, but only two of its columns

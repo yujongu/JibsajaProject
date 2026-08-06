@@ -541,6 +541,7 @@ class _CategoryGrid extends StatelessWidget {
         runSpacing: 8,
         children: purchaseCategories.map((cat) {
           final isSelected = cat == selected;
+          final catColor = cat.color(isDark);
           return GestureDetector(
             onTap: () => onChanged(cat),
             child: AnimatedContainer(
@@ -548,20 +549,20 @@ class _CategoryGrid extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? cat.color.withValues(alpha: 0.15)
+                    ? catColor.withValues(alpha: 0.15)
                     : (isDark
                         ? AppColors.darkBorder
                         : AppColors.surfaceContainerLow),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                    color: isSelected ? cat.color : Colors.transparent,
+                    color: isSelected ? catColor : Colors.transparent,
                     width: 1.5),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(cat.icon,
                     size: 14,
                     color: isSelected
-                        ? cat.color
+                        ? catColor
                         : (isDark
                             ? AppColors.textSecondary
                             : AppColors.textSecondaryLight)),
@@ -571,7 +572,7 @@ class _CategoryGrid extends StatelessWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: isSelected
-                            ? cat.color
+                            ? catColor
                             : (isDark
                                 ? AppColors.textSecondary
                                 : AppColors.textSecondaryLight))),
