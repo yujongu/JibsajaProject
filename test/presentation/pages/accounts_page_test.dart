@@ -4,17 +4,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jibsaja/domain/entities/sheet_account.dart';
 import 'package:jibsaja/presentation/pages/accounts/accounts_page.dart';
 import 'package:jibsaja/presentation/providers/sheets_providers.dart';
+import 'package:jibsaja/presentation/shared/widgets/updated_at_label.dart';
 
 /// Pumps the page with [accountsProvider] stubbed, so no repository (and no
-/// network) is ever constructed.
+/// network) is ever constructed. [accountsUpdatedAtProvider] is overridden too
+/// because it reaches for the repository directly.
 Future<void> _pumpPage(
   WidgetTester tester,
-  List<SheetAccount> accounts,
-) async {
+  List<SheetAccount> accounts, {
+  DateTime? updatedAt,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         accountsProvider.overrideWith((ref) => Stream.value(accounts)),
+        accountsUpdatedAtProvider.overrideWithValue(updatedAt),
       ],
       child: const MaterialApp(home: AccountsPage()),
     ),
@@ -88,5 +92,24 @@ void main() {
       find.text('No credit or bank accounts in the sheet'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('carries the shared updated-at label, fed by its own provider',
+      (tester) async {
+    await _pumpPage(tester, const [credit]);
+
+    // The regression this guards is the label being absent from the page
+    // entirely, which is how the tab first shipped. That it renders nothing for
+    // a null time is UpdatedAtLabel's documented behavior, and the value the
+    // page feeds it is covered by accountsUpdatedAtProvider's own tests —
+    // pumping a non-null one here would subscribe the widget's one-minute
+    // ticker, which no amount of pumping settles.
+    // skipOffstage: false because a null time makes the label render
+    // SizedBox.shrink(), and a zero-size widget does not match the default
+    // finder even though it is mounted.
+    final label = find.byType(UpdatedAtLabel, skipOffstage: false);
+    expect(label, findsOneWidget);
+    expect(tester.widget<UpdatedAtLabel>(label).updatedAt, isNull);
+    expect(find.textContaining('Updated'), findsNothing);
   });
 }

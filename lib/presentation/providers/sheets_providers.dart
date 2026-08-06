@@ -8,6 +8,7 @@ import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/result.dart';
 import '../../domain/entities/sheet_account.dart';
 import '../../domain/entities/sheet_transaction.dart';
+import '../../domain/entities/transaction_category.dart';
 import '../../domain/entities/transaction_summary.dart';
 import '../../domain/repositories/i_sheets_repository.dart';
 import 'audit_log_providers.dart';
@@ -174,6 +175,12 @@ final dashboardUpdatedAtProvider = Provider<DateTime?>((ref) {
   return ref.watch(sheetsRepositoryProvider).cachedDashboardAt();
 });
 
+/// When the account balances currently on screen were fetched from the sheet.
+final accountsUpdatedAtProvider = Provider<DateTime?>((ref) {
+  ref.watch(accountsProvider);
+  return ref.watch(sheetsRepositoryProvider).cachedAccountsAt();
+});
+
 /// The calendar month the Transactions page is showing, normalized to the 1st
 /// with no time component. Starts on the current month every launch (not
 /// persisted — reopening the app should land on "now").
@@ -257,6 +264,40 @@ final selectedMonthTransactionsProvider =
   final txs = ref.watch(transactionsProvider).valueOrNull ?? const [];
   final month = ref.watch(selectedMonthProvider);
   return txs.inMonth(month.year, month.month);
+});
+
+/// Identifies one category bar on the summary card: a category within one
+/// currency's section. Records compare structurally, so this works as a
+/// provider-family key.
+typedef CategoryQuery = ({TransactionCategory category, String? currency});
+
+/// The selected month's rows behind one category bar, newest first.
+final categoryTransactionsProvider =
+    Provider.autoDispose.family<List<SheetTransaction>, CategoryQuery>(
+        (ref, query) {
+  final txs = ref.watch(selectedMonthTransactionsProvider);
+  final currencies = ref.watch(accountCurrenciesProvider);
+  return txs.inCategory(
+    query.category,
+    currency: query.currency,
+    currencies: currencies,
+  );
+});
+
+/// Spend on one category over the 12 months ending at the selected one, oldest
+/// first. Reads **all** transactions, not just the selected month's — the
+/// window is the point.
+final categoryTrendProvider =
+    Provider.autoDispose.family<List<MonthlySpend>, CategoryQuery>((ref, query) {
+  final txs = ref.watch(transactionsProvider).valueOrNull ?? const [];
+  final month = ref.watch(selectedMonthProvider);
+  final currencies = ref.watch(accountCurrenciesProvider);
+  return txs.monthlySpend(
+    query.category,
+    endMonth: month,
+    currency: query.currency,
+    currencies: currencies,
+  );
 });
 
 /// One choice in the add-row account picker.

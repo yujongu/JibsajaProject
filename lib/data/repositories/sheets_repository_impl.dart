@@ -301,6 +301,9 @@ class SheetsRepositoryImpl implements ISheetsRepository {
   DateTime? cachedDashboardAt() => cache?.dashboardTimestamp();
 
   @override
+  DateTime? cachedAccountsAt() => cache?.accountsTimestamp();
+
+  @override
   Future<Result<void>> appendTransaction(SheetTransaction tx) async {
     if (webAppUrl.isEmpty) {
       return const Failure('Google Sheet is not configured.');

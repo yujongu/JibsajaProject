@@ -43,6 +43,8 @@ class _FakeDelegate implements ISheetsRepository {
   DateTime? cachedTransactionsAt() => null;
   @override
   DateTime? cachedDashboardAt() => null;
+  @override
+  DateTime? cachedAccountsAt() => null;
 }
 
 class _ThrowingStore extends AuditLogStore {
@@ -148,6 +150,7 @@ void main() {
       repo.cachedAccounts();
       repo.cachedTransactionsAt();
       repo.cachedDashboardAt();
+      repo.cachedAccountsAt();
 
       expect(store.records(), isEmpty);
     });

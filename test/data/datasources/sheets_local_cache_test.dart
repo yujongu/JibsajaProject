@@ -69,5 +69,28 @@ void main() {
       expect(test.readAccounts(), isNull);
       expect(prefs.getString('cache.accounts.body.real.v1'), isNotNull);
     });
+
+    test('accounts carry a fetch timestamp, cleared by evict', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final real = SheetsLocalCache(prefs, profileId: 'real');
+
+      // Nothing cached yet: the page's "Updated …" caption stays hidden rather
+      // than claiming a time it does not have.
+      expect(real.accountsTimestamp(), isNull);
+
+      real.writeAccounts('{"grid": [["Account Name","Currency"]]}');
+      final at = real.accountsTimestamp();
+      expect(at, isNotNull);
+      expect(
+        DateTime.now().difference(at!).inSeconds.abs(),
+        lessThan(5),
+      );
+
+      // Re-pointing the slot must drop the timestamp with the body, or the
+      // caption would date a response that is no longer there.
+      real.evict();
+      expect(real.accountsTimestamp(), isNull);
+    });
   });
 }

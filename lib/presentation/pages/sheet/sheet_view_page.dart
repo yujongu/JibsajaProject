@@ -3,18 +3,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../domain/entities/sheet_account.dart';
-import '../../../domain/entities/sheet_transaction.dart';
 import '../../../domain/entities/transaction_category.dart';
 import '../../../domain/entities/transaction_summary.dart';
-import '../../../domain/entities/transaction_type.dart';
 import '../../extensions/transaction_category_ui.dart';
 import '../../providers/sheets_providers.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/money.dart';
 import '../../shared/widgets/error_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
+import '../../shared/widgets/transaction_tile.dart';
 import '../../shared/widgets/updated_at_label.dart';
 import '../../widgets/add_transaction_sheet.dart';
+import '../category/category_detail_page.dart';
+
+/// This page's data refresh. It also refetches the `Accounts` tab: those
+/// currencies label every amount here, so a refresh that skipped them could
+/// never resolve a row still showing a bare, unlabelled number — visiting
+/// another tab or relaunching was the only way to pick up a new account.
+void _refresh(WidgetRef ref) {
+  ref.invalidate(transactionsProvider);
+  ref.invalidate(accountsProvider);
+}
 
 class SheetViewPage extends ConsumerWidget {
   const SheetViewPage({super.key});
@@ -32,7 +41,7 @@ class SheetViewPage extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(transactionsProvider),
+            onPressed: () => _refresh(ref),
           ),
         ],
         floatingActionButton: FloatingActionButton.extended(
@@ -43,7 +52,7 @@ class SheetViewPage extends ConsumerWidget {
           label: const Text('Add'),
         ),
         body: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(transactionsProvider),
+          onRefresh: () async => _refresh(ref),
           child: async.when(
             loading: () => const _LoadingList(),
             // While a refetch is in flight, `when` re-surfaces the previous
@@ -58,7 +67,7 @@ class SheetViewPage extends ConsumerWidget {
                       ErrorCard(
                         error: e,
                         isDark: isDark,
-                        onRetry: () => ref.invalidate(transactionsProvider),
+                        onRetry: () => _refresh(ref),
                       ),
                     ],
                   ),
@@ -187,7 +196,7 @@ class _TransactionsListState extends ConsumerState<_TransactionsList> {
                   itemCount: txs.length,
                   itemBuilder: (context, i) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: _TransactionTile(
+                    child: TransactionTile(
                       tx: txs[i],
                       isDark: widget.isDark,
                       currency:
@@ -481,11 +490,12 @@ class _CurrencySection extends StatelessWidget {
               color: tertiary,
             ),
           ),
-          const SizedBox(height: 10),
-          for (final cs in summary.spendingByCategory) ...[
+          const SizedBox(height: 5),
+          // No separator: _CategoryBar carries its own vertical padding, which
+          // is there to make each bar a usable tap target. The 5px on each side
+          // of adjacent bars adds up to the 10px gap this list always had.
+          for (final cs in summary.spendingByCategory)
             _CategoryBar(spending: cs, currency: code, isDark: isDark),
-            const SizedBox(height: 10),
-          ],
         ],
       ],
     );
@@ -602,209 +612,80 @@ class _CategoryBar extends StatelessWidget {
     final trackColor =
         isDark ? AppColors.darkBorder : AppColors.surfaceContainerLow;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(cat.icon, size: 14, color: color),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                cat.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isDark
-                      ? AppColors.textPrimary
-                      : AppColors.textPrimaryLight,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              money(spending.amount, currency),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: isDark
-                    ? AppColors.textPrimary
-                    : AppColors.textPrimaryLight,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 5),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: Stack(
-            children: [
-              Container(height: 6, color: trackColor),
-              FractionallySizedBox(
-                widthFactor: spending.fraction.clamp(0.0, 1.0),
-                child: Container(height: 6, color: color),
-              ),
-            ],
+    // GestureDetector, not InkWell: _SummaryHeader is a bare Container, so a
+    // ripple would have no Material ancestor to draw on. The vertical padding
+    // is what brings a ~25px bar up to a usable tap target.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => CategoryDetailPage(
+            category: cat,
+            currency: currency,
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TransactionTile extends StatelessWidget {
-  const _TransactionTile({
-    required this.tx,
-    required this.isDark,
-    this.currency,
-  });
-  final SheetTransaction tx;
-  final bool isDark;
-
-  /// Currency code of [tx]'s account, or null when the sheet's `Accounts` tab
-  /// does not name one.
-  final String? currency;
-
-  @override
-  Widget build(BuildContext context) {
-    final isPurchase = tx.type == TransactionType.purchase;
-    final cat = tx.category;
-    // A purchase is colored by its category, not by its type — otherwise every
-    // expense on screen is the same red. Uncategorized rows fall back to Misc.,
-    // which is where the month summary buckets them too.
-    final color = isPurchase
-        ? (cat ?? TransactionCategory.misc).color(isDark)
-        : _typeColor(tx.type);
-
-    final title = switch (tx.type) {
-      TransactionType.purchase => tx.description.isNotEmpty
-          ? tx.description
-          : (cat?.label ?? 'Purchase'),
-      // Transfer rows carry no ticker; show their note (the trade description).
-      TransactionType.transfer =>
-        tx.description.isNotEmpty ? tx.description : 'Transfer',
-      TransactionType.deposit =>
-        tx.description.isNotEmpty ? tx.description : 'Deposit',
-      TransactionType.unknown => tx.description.isNotEmpty
-          ? tx.description
-          : (tx.rawType ?? tx.type.label),
-      _ => tx.ticker ?? tx.type.label,
-    };
-
-    final subtitleParts = <String>[
-      tx.account,
-      DateFormat('MMM d, yyyy').format(tx.date),
-      if (!isPurchase && tx.quantity != null && tx.price != null)
-        '${plainNumber(tx.quantity!)} @ ${plainNumber(tx.price!)}',
-    ];
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : AppColors.surfaceCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-          width: 0.5,
         ),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              switch (tx.type) {
-                TransactionType.purchase =>
-                  cat?.icon ?? Icons.shopping_bag_rounded,
-                TransactionType.buy => Icons.trending_up_rounded,
-                TransactionType.sell => Icons.trending_down_rounded,
-                TransactionType.transfer => Icons.swap_horiz_rounded,
-                TransactionType.deposit => Icons.arrow_downward_rounded,
-                TransactionType.unknown => Icons.help_outline_rounded,
-              },
-              size: 20,
-              color: color,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
+                Icon(cat.icon, size: 14, color: color),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    cat.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDark
+                          ? AppColors.textPrimary
+                          : AppColors.textPrimaryLight,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  money(spending.amount, currency),
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
                     color: isDark
                         ? AppColors.textPrimary
                         : AppColors.textPrimaryLight,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitleParts.join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark
-                        ? AppColors.textSecondary
-                        : AppColors.textSecondaryLight,
-                  ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 16,
+                  color: isDark
+                      ? AppColors.textTertiary
+                      : AppColors.textTertiaryLight,
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                money(tx.computedAmount, currency),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: isDark
-                      ? AppColors.textPrimary
-                      : AppColors.textPrimaryLight,
-                ),
+            const SizedBox(height: 5),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Stack(
+                children: [
+                  Container(height: 6, color: trackColor),
+                  FractionallySizedBox(
+                    widthFactor: spending.fraction.clamp(0.0, 1.0),
+                    child: Container(height: 6, color: color),
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                // An unrecognized row is badged with the sheet's own wording.
-                tx.rawType ?? tx.type.label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
-  }
-}
-
-Color _typeColor(TransactionType t) {
-  switch (t) {
-    case TransactionType.purchase: return AppColors.negative;
-    case TransactionType.buy:      return AppColors.primary;
-    case TransactionType.sell:     return AppColors.warning;
-    case TransactionType.transfer: return AppColors.secondaryFallback;
-    case TransactionType.deposit:  return AppColors.positive;
-    case TransactionType.unknown:  return AppColors.textTertiaryLight;
   }
 }
 

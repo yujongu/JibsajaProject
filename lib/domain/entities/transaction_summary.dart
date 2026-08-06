@@ -118,6 +118,9 @@ class CategorySpending {
   final double fraction;
 }
 
+/// One calendar month's spend in a single category, for the trend chart.
+typedef MonthlySpend = ({DateTime month, double amount});
+
 /// One month's worth of transactions, for the grouped list view.
 class MonthGroup {
   const MonthGroup({
@@ -136,6 +139,29 @@ class MonthGroup {
 
   /// Stable sort key: larger = more recent.
   int get sortKey => year * 100 + month;
+}
+
+/// Whether [tx] is one of the rows a category bar counts.
+///
+/// The single definition of "belongs to this category bar", shared by
+/// [TransactionAggregates.inCategory] and [TransactionAggregates.monthlySpend]
+/// so the two cannot drift apart. It repeats the rules [_Accumulator.add]
+/// applies when building the bar: only purchases count, and a row with no
+/// category of its own is Misc.
+///
+/// A null [currency] is [TransactionAggregates.summarize]'s catch-all section —
+/// it exists only when *no* row anywhere resolved a currency, so every row
+/// belongs to it and nothing is excluded on that axis.
+bool _countsForCategory(
+  SheetTransaction tx,
+  TransactionCategory category, {
+  required String? currency,
+  required Map<String, String> currencies,
+}) {
+  if (tx.type != TransactionType.purchase) return false;
+  if ((tx.category ?? TransactionCategory.misc) != category) return false;
+  if (currency == null) return true;
+  return currencies[SheetAccount.key(tx.account)] == currency;
 }
 
 /// Running totals for one currency while [TransactionAggregates.summarize]
@@ -198,6 +224,55 @@ extension TransactionAggregates on List<SheetTransaction> {
   /// Rows dated within the given calendar [month] (1–12) of [year].
   List<SheetTransaction> inMonth(int year, int month) =>
       where((tx) => tx.date.year == year && tx.date.month == month).toList();
+
+  /// Purchase rows in [category] whose account resolves to [currency].
+  ///
+  /// This is the drill-down behind one of [CurrencySummary.spendingByCategory]'s
+  /// bars, so it mirrors [_countsForCategory] — the same rules [summarize] uses
+  /// to build that bar.
+  List<SheetTransaction> inCategory(
+    TransactionCategory category, {
+    String? currency,
+    Map<String, String> currencies = const {},
+  }) =>
+      where((tx) => _countsForCategory(tx, category,
+              currency: currency, currencies: currencies))
+          .toList();
+
+  /// Spend on [category] per calendar month, for the [months] months ending at
+  /// [endMonth], **oldest first**. Filtered exactly as [inCategory].
+  ///
+  /// Every slot in the window is present, so a month with no spend comes back
+  /// as zero rather than being absent — an empty slot is a real observation,
+  /// and it keeps the chart's bar count fixed.
+  List<MonthlySpend> monthlySpend(
+    TransactionCategory category, {
+    required DateTime endMonth,
+    int months = 12,
+    String? currency,
+    Map<String, String> currencies = const {},
+  }) {
+    // Same `year * 100 + month` bucket key as MonthGroup.sortKey.
+    final totals = <int, double>{};
+    for (final tx in this) {
+      if (!_countsForCategory(tx, category,
+          currency: currency, currencies: currencies)) {
+        continue;
+      }
+      final key = tx.date.year * 100 + tx.date.month;
+      // Expense amounts are stored negative; report spending positive.
+      totals[key] = (totals[key] ?? 0) + -tx.computedAmount;
+    }
+
+    final window = <MonthlySpend>[];
+    for (var i = months - 1; i >= 0; i--) {
+      // DateTime normalizes an out-of-range month, so this walks back over a
+      // year boundary on its own — same trick as SelectedMonthNotifier.shift.
+      final m = DateTime(endMonth.year, endMonth.month - i);
+      window.add((month: m, amount: totals[m.year * 100 + m.month] ?? 0));
+    }
+    return window;
+  }
 
   /// Summarize these rows, split by the currency of each row's account.
   ///

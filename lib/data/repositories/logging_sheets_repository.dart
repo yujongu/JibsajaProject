@@ -59,6 +59,9 @@ class LoggingSheetsRepository implements ISheetsRepository {
   @override
   DateTime? cachedDashboardAt() => delegate.cachedDashboardAt();
 
+  @override
+  DateTime? cachedAccountsAt() => delegate.cachedAccountsAt();
+
   // ── Mutations: delegate, then record ───────────────────────────────────────
 
   @override

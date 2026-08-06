@@ -1,6 +1,251 @@
 # HANDOVER
 
 ## Current Milestone
+**Category drill-down: tap a bar to see the transactions behind it
+(2026-08-07).** Analyzer clean, **159/159 tests**. **Uncommitted**, and it sits
+on top of the also-uncommitted Accounts-freshness work below — the two overlap in
+`sheet_view_page.dart`, `sheets_providers.dart` and their two test files.
+
+The summary card said **how much** went to 식비 in August but gave no way to
+reach the rows behind that number. `_CategoryBar` was inert — nothing on the card
+was tappable at all. Tapping a bar now pushes a page with that category's
+transactions for the month, a header total, and a 12-month trend.
+
+### Context & Decisions
+1. **⭐ The user's two questions were about cost, and both answers were
+   favourable.** *Will a full detail page slow the app down?* No — a
+   `MaterialPageRoute` builds on push, so the Transactions page carries nothing
+   extra until you open it, and `transactionsProvider` already holds the whole
+   sheet in memory (one GET, cached body), so there is no new I/O of any kind.
+   *Is a monthly trend affordable?* It is **cheaper than one month-arrow tap**:
+   a single O(n) pass with no list allocation, where every month change already
+   runs `inMonth()` twice (two full passes, two list allocations) plus
+   `monthBoundsProvider`'s full loop. The page's measured bottleneck has always
+   been widget building, never arithmetic (`942182b`).
+2. **⭐ `_countsForCategory` is the whole correctness story.** A drill-down total
+   that disagrees with the bar that opened it would be worse than no drill-down.
+   That one private predicate in `transaction_summary.dart` restates
+   `_Accumulator.add`'s rules — purchases only, a null category is `Misc.`, spend
+   is `-amount` — and **both** `inCategory` and `monthlySpend` route through it
+   so they cannot drift apart. The domain tests exist mostly to pin it.
+3. **A null `currency` means "match everything", not "match nothing".**
+   `summarize()` emits a null-currency section only when *no* row anywhere
+   resolved a currency, so that section covers every row. Getting this backwards
+   would empty the page for anyone whose `Accounts` tab is unreachable.
+4. **The trend is read-only** (user's pick over tapping a bar to switch months).
+   A chart that silently moved the month behind the page is a surprise; the
+   arrows on the Transactions page stay the one way to change period.
+5. **Fixed 12-month window** (user's pick over all-history). The bar count never
+   changes, so the chart looks the same whether the sheet holds 6 months or 6
+   years, and months with no spend render as visibly empty slots rather than
+   vanishing.
+6. **The list stays scoped to the selected month** (user's pick). Its total then
+   equals the bar exactly; the trend is what carries history.
+7. **No chart package.** The app runs on six dependencies and a 12-bar chart is
+   a `Row` of `Container`s using the same `FractionallySizedBox` technique
+   `_CategoryBar` already uses. `fl_chart` for one screen was not worth it.
+8. **The header is derived from providers, not passed in from the tapped bar.**
+   Passing `CategorySpending` would have been simpler but goes stale if the
+   sheet refreshes while the page is open.
+9. **Read-only.** No sheet contract, no network, no POST path.
+
+### What shipped
+- **Domain** (`transaction_summary.dart`): new `MonthlySpend` typedef
+  (`({DateTime month, double amount})`); `inCategory` and `monthlySpend` added to
+  the existing `TransactionAggregates` extension as siblings of `inMonth`; the
+  private `_countsForCategory` predicate they share. `monthlySpend` walks the
+  window with `DateTime(endMonth.year, endMonth.month - i)`, which crosses a year
+  boundary on its own — the same trick `SelectedMonthNotifier.shift` uses.
+- **Presentation** (`sheets_providers.dart`): `CategoryQuery` typedef
+  (`({TransactionCategory category, String? currency})` — records compare
+  structurally, so it works as a family key), plus
+  `categoryTransactionsProvider` and `categoryTrendProvider`, both
+  `Provider.autoDispose.family`. The trend reads **all** transactions; the list
+  reads `selectedMonthTransactionsProvider`.
+- **Presentation** (new `shared/widgets/transaction_tile.dart`):
+  `_TransactionTile` moved out of `sheet_view_page.dart` and made public as
+  `TransactionTile`, taking that file's `_typeColor` with it. Body unchanged.
+- **Presentation** (new `pages/category/category_detail_page.dart`): a
+  `ConsumerWidget` in the same `GradientBackground` → `FeatureScaffold` shell as
+  `SettingsPage`/`HistoryPage`. Three slivers — header, `_TrendChart`, and a
+  **`SliverList.builder`** of rows (a `Column` here would have repeated the
+  `942182b` bug). `CategorySpending.fraction` already is the share-of-spending
+  figure, so the "% of spending" line needed no new arithmetic.
+- **Presentation** (`sheet_view_page.dart`): `_CategoryBar` wrapped in a
+  `GestureDetector` that pushes the page itself — it already knew its category
+  and currency, so **no callback threading through `_CurrencySection` or
+  `_SummaryHeader`**, neither of which was touched. Gained 5px vertical padding
+  for the tap target and a chevron so the affordance is visible.
+- **Tests** (+19): 10 domain cases across `inCategory` (purchases only,
+  null → `Misc.`, currency match, the null-currency catch-all) and
+  `monthlySpend` (12 slots oldest-first, zero-fill, year-boundary walk, window
+  exclusion); 3 provider cases; 1 in `sheet_view_page_test.dart` for the tap;
+  new `category_detail_page_test.dart` (5) including the total-matches-the-bar
+  assertion.
+
+### The 'Gravel' (this session)
+- **Not verified on-device.** No APK built this session. The trend chart in
+  particular has never been looked at — see Next Immediate Step.
+- **⭐ The bar list's spacing was rebalanced, not just padded.** `_CategoryBar`
+  now carries `symmetric(vertical: 5)` and `_CurrencySection`'s per-bar
+  `SizedBox(height: 10)` was **removed**, so 5+5 between neighbours reproduces
+  the old 10px gap. The label gap above the first bar went 10 → 5. Net effect is
+  the card is ~5px shorter at the bottom of the category list. **The card's
+  height is what the `AnimatedSize` month transition sizes against**, so this is
+  worth a glance on-device.
+- **The tap target is ~35px, not the 44px guideline.** Twelve bars at 44px each
+  would have grown the card substantially. `HitTestBehavior.opaque` means the
+  whole row including the padding is tappable, but a mis-tap onto the neighbour
+  is possible.
+- **`TransactionTile` moved, but `add_transaction_sheet.dart` still has its own
+  duplicate `_typeColor`.** Deliberately untouched — pre-existing and unrelated,
+  as it has been for several sessions. The duplication is now between a shared
+  widget and a form, which is at least a clearer split than before.
+- **The trend's month labels are single letters** (`DateFormat('MMM')[0]`), so a
+  12-month window shows J-F-M-A-M-J-J-A-S-O-N-D with three ambiguous pairs. Fine
+  as a shape-reading device, useless for pinpointing a month — the selected one
+  is bolded and colored to compensate.
+- **An all-zero trend window renders 12 hairlines.** Reachable for a category
+  with spend in the selected month only if that month is somehow excluded, which
+  it cannot be — but the `peak == 0` guard exists so it degrades quietly rather
+  than dividing by zero.
+- **The empty-state notice is nearly unreachable**: a bar exists on the card
+  exactly when the category has spend, so the only route in is a refresh landing
+  while the page is open. It is 12 lines and beats a blank screen.
+- Pre-existing and untouched: dead `groupByMonth()` + `MonthGroup` in
+  `transaction_summary.dart` (still dead — the all-history option that would
+  have revived it was not the one chosen); dead `currency_formatter.dart`;
+  `_NetCaption` still renders a zero net flow as `+0`.
+
+## Next Immediate Step
+- **`flutter build apk`, install, open Transactions** against the **Real** sheet
+  and tap into a few categories:
+  - ⭐ **The page's header total equals the bar that opened it**, in every month
+    tried. That is the acceptance criterion — a mismatch means the filter drifted
+    from `summarize()`'s rules and `_countsForCategory` is where to look.
+  - The transaction count in the header matches the rows listed, and every row is
+    that category.
+  - The trend shows 12 bars ending at the month you came from, the selected month
+    stands out, and empty months read as empty rather than missing.
+  - **Back out and confirm the month arrows have not moved** — the chart is
+    read-only.
+  - A month with **both ₩ and USD** sections: tapping a bar in each opens a page
+    scoped to that currency alone.
+  - **Watch the month-switch animation** after the spacing change (see Gravel).
+  - Scroll a heavy category (100+ rows) — it should feel like the main list.
+  - **Do not tap Add while verifying** — the whole change is read-only.
+- Toggle the OS theme and check the trend bars and header in both.
+- Then commit. **The tree also holds the Accounts-freshness work below**, which
+  is a separate milestone — commit them separately, splitting the shared hunks in
+  `sheet_view_page.dart`, `sheets_providers.dart`,
+  `sheets_providers_test.dart` and `sheet_view_page_test.dart`.
+
+## Previous Milestone
+**Accounts page freshness: `Updated …` caption + cross-refresh (2026-08-07).**
+Analyzer clean, **140/140 tests**, release APK built. **Uncommitted.**
+
+Two freshness gaps. The first the user asked for directly; the second came out
+of their follow-up question — *"why doesn't refreshing one page refresh the
+others?"* — which turned out to have a real answer.
+
+### Context & Decisions
+1. **The missing caption was one missing method.** When the `Accounts` tab was
+   first read (`0af12d8`, purely for currency symbols), the freshness plumbing
+   was skipped on purpose — `writeAccounts` carried a comment saying nothing in
+   the UI reports how fresh the accounts are. The Accounts page made that false.
+   The fix walks the existing transactions/dashboard chain end to end (cache key
+   → repo → interface → decorator → provider → page); every step had a sibling
+   to copy and no new concept was added.
+2. **⭐ The refresh question exposed a real one-way staleness bug.** Each page
+   invalidates only its own provider, and each is its own GET — right for the
+   Dashboard, which shares nothing. But `accountsProvider` *also* feeds the
+   Transactions page's ₩/$ symbols and its per-currency summary split.
+   Refreshing Accounts updated Transactions; refreshing Transactions could not
+   pick up a newly added account. A row against it showed a bare unlabelled
+   number that **pull-to-refresh would never fix** — only a tab visit or a
+   relaunch would. `_refresh(ref)` in `sheet_view_page.dart` now invalidates
+   both.
+3. **Refresh-all was rejected** (user's pick of the three options). Any page
+   refreshing everything means three parallel GETs at Apps Script — the exact
+   burst shape `_get()`'s 429/5xx retry exists to survive. Two GETs from one
+   page is bounded: a failed accounts leg is swallowed by `_cachedThenLive`
+   while a cache exists, so the worst case is the currency map staying stale,
+   which is today's behavior. **The syncing bar is unaffected** — it watches
+   `isFetchingProvider('transactionsProvider')` only.
+4. **The append path was left alone.** `add_transaction_sheet.dart` still
+   invalidates only `transactionsProvider` after a successful append; appending
+   a row cannot change the `Accounts` tab.
+5. **Existing installs briefly show no caption.** Their cached accounts body has
+   no timestamp key, so it reads null until the next successful fetch and
+   `UpdatedAtLabel` renders nothing. Self-heals in seconds, and is strictly
+   better than dating a response with a time it never had.
+
+### What shipped
+- **Data** (`sheets_local_cache.dart`): `cache.accounts.at.{profileId}.v1`,
+  written by `writeAccounts`, read by `accountsTimestamp()`, **and removed in
+  `evict()`** — miss that last one and a re-pointed profile keeps a timestamp
+  dating a body that was dropped. The obsolete "no timestamp companion" comment
+  is gone.
+- **Domain/Data**: `cachedAccountsAt()` on `ISheetsRepository`,
+  `SheetsRepositoryImpl` and `LoggingSheetsRepository` (reads stay unlogged).
+- **Presentation**: `accountsUpdatedAtProvider`; `_AccountsBody` takes an
+  `updatedAt` and renders `UpdatedAtLabel` as its first list child; `_refresh`
+  replaces the three `ref.invalidate(transactionsProvider)` call sites on the
+  Transactions page (app-bar action, pull-to-refresh, error retry).
+- **Docs** (`docs/data/sheets.md`): the caption's plumbing, plus a new "Which
+  refresh refetches what" table. The "a bare number means the account is missing
+  from this tab" line now also names stale cache as a cause.
+- **Tests** (+4 → 140): cache timestamp round-trip + evict; `cachedAccountsAt`
+  added to the "reads pass through unlogged" assertion; both `ISheetsRepository`
+  fakes gained the member (`_FakeRepo`'s is scriptable via a new `accountsAt`);
+  two `accountsUpdatedAtProvider` cases; one page test that the label is wired
+  in.
+
+### The 'Gravel' (this session)
+- **Not verified on-device yet** — see Next Immediate Step. The cross-refresh
+  has **no unit test**: asserting that a tap invalidates two providers needs a
+  repository fake wired through the page, which these page tests deliberately
+  avoid constructing.
+- ⚠️ **`UpdatedAtLabel` cannot be pumped with a non-null time in a widget test.**
+  It watches a **non-autoDispose** one-minute `Stream.periodic`, so
+  `pumpAndSettle` never settles and the timer is still pending at teardown even
+  after unmounting the tree — disposing the `ProviderScope` did not cancel it,
+  and neither did making the ticker `autoDispose` (tried, reverted, since it
+  fixed nothing). The value the page feeds the label is covered at the
+  **provider** level instead. If a future test needs the rendered "3m ago", the
+  lever is injecting the ticker, not more pumping.
+- **`find.byType(UpdatedAtLabel)` needs `skipOffstage: false`.** With a null time
+  the label builds `SizedBox.shrink()`, and the default finder skips a zero-size
+  widget even though it is mounted. The comment in `accounts_page_test.dart`
+  says so.
+- **The Accounts empty state has no caption** — `_AccountsBody` early-returns
+  before the list. Matches the Transactions empty state, but it is the one place
+  you cannot tell whether "no credit or bank accounts" is fresh or cached.
+- **Two GETs now fire from one pull on Transactions.** Bounded (decision 3), but
+  it is the first place in the app where one user action makes two requests. If
+  Apps Script starts 429-ing on refresh, look here first.
+- Pre-existing and untouched: everything listed under the two milestones below.
+
+## Next Immediate Step
+- **Install `build/app/outputs/flutter-apk/app-release.apk`.** It also carries
+  the Accounts tab and the category colors below, **neither of which has been
+  verified on-device** — do all three checklists in one pass.
+- **The caption**: Accounts shows `Updated …` above the first section, styled
+  like the other two pages, and pull-to-refresh moves it to `just now`. It is
+  **briefly absent on the very first launch** after this update (decision 5) —
+  expected, not a bug. Airplane mode → relaunch: cached balances render *and*
+  the caption shows the old time rather than vanishing.
+- **⭐ The cross-refresh, end to end** — the case that prompted it:
+  1. Add a new account (name + `Currency`) to the sheet's `Accounts` tab.
+  2. Add a transaction against it in the Transactions tab.
+  3. Pull to refresh **on the Transactions page only**. The new row must appear
+     **with its ₩/$ symbol** — before this change it stayed a bare number until
+     you visited another tab.
+  - Refreshing Transactions should still feel like one action: no double
+    spinner, and the syncing bar still clears when the rows land.
+- **Do not tap Add while verifying the Accounts tab** — that part is read-only.
+
+## Previous Milestone
 **Expense rows are colored by category, not by type (2026-08-06).** Analyzer
 clean, **136/136 tests**. **Committed on `main`**, directly on top of the
 Accounts tab below (`e653ed2`), which shipped in the same session.

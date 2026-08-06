@@ -8,6 +8,7 @@ import '../../shared/utils/money.dart';
 import '../../shared/widgets/error_card.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
+import '../../shared/widgets/updated_at_label.dart';
 import '../../widgets/account_picker_field.dart' show AccountMonogram;
 
 /// The `Type` values this page lists, in display order. Everything else in the
@@ -62,6 +63,7 @@ class AccountsPage extends ConsumerWidget {
             data: (accounts) => _AccountsBody(
               credit: accounts.ofType(_kCreditType),
               bank: accounts.ofType(_kBankType),
+              updatedAt: ref.watch(accountsUpdatedAtProvider),
               isDark: isDark,
             ),
           ),
@@ -75,11 +77,13 @@ class _AccountsBody extends StatelessWidget {
   const _AccountsBody({
     required this.credit,
     required this.bank,
+    required this.updatedAt,
     required this.isDark,
   });
 
   final List<SheetAccount> credit;
   final List<SheetAccount> bank;
+  final DateTime? updatedAt;
   final bool isDark;
 
   @override
@@ -91,6 +95,7 @@ class _AccountsBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
+        UpdatedAtLabel(updatedAt: updatedAt, isDark: isDark),
         if (credit.isNotEmpty) ...[
           _SectionLabel('Credit cards', isDark: isDark),
           const SizedBox(height: 8),

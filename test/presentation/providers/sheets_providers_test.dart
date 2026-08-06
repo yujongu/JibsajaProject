@@ -4,6 +4,7 @@ import 'package:jibsaja/domain/entities/dashboard_summary.dart';
 import 'package:jibsaja/domain/entities/result.dart';
 import 'package:jibsaja/domain/entities/sheet_account.dart';
 import 'package:jibsaja/domain/entities/sheet_transaction.dart';
+import 'package:jibsaja/domain/entities/transaction_category.dart';
 import 'package:jibsaja/domain/entities/transaction_type.dart';
 import 'package:jibsaja/domain/repositories/i_sheets_repository.dart';
 import 'package:jibsaja/presentation/providers/sheets_providers.dart';
@@ -12,12 +13,16 @@ SheetTransaction _tx(
   String account, {
   DateTime? date,
   double amount = -1,
+  TransactionCategory? category,
+  int rowIndex = 0,
 }) =>
     SheetTransaction(
       date: date ?? DateTime(2026, 7, 1),
       account: account,
       type: TransactionType.purchase,
+      category: category,
       amount: amount,
+      rowIndex: rowIndex,
     );
 
 /// Scriptable repository: [fetchResults] are returned in order; the last one
@@ -27,11 +32,13 @@ class _FakeRepo implements ISheetsRepository {
     this.cached,
     required this.fetchResults,
     this.accountsResult = const Failure('unused'),
+    this.accountsAt,
   });
 
   final List<SheetTransaction>? cached;
   final List<Result<List<SheetTransaction>>> fetchResults;
   final Result<List<SheetAccount>> accountsResult;
+  final DateTime? accountsAt;
   int fetchCount = 0;
 
   @override
@@ -52,6 +59,8 @@ class _FakeRepo implements ISheetsRepository {
   DateTime? cachedTransactionsAt() => null;
   @override
   DateTime? cachedDashboardAt() => null;
+  @override
+  DateTime? cachedAccountsAt() => accountsAt;
   @override
   Future<Result<DashboardSummary>> fetchDashboard() async =>
       const Failure('unused');
@@ -309,6 +318,125 @@ void main() {
       final container = await loaded(const Failure('Accounts tab missing'));
 
       expect(container.read(accountCurrenciesProvider), isEmpty);
+    });
+  });
+
+  group('accountsUpdatedAtProvider', () {
+    Future<ProviderContainer> loaded({DateTime? at}) async {
+      final container = ProviderContainer(overrides: [
+        sheetsRepositoryProvider.overrideWithValue(_FakeRepo(
+          fetchResults: [const Success(<SheetTransaction>[])],
+          accountsResult: const Success(<SheetAccount>[]),
+          accountsAt: at,
+        )),
+      ]);
+      addTearDown(container.dispose);
+      container.listen(accountsProvider, (_, _) {}, fireImmediately: true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      return container;
+    }
+
+    test('surfaces when the cached accounts were fetched', () async {
+      final at = DateTime(2026, 8, 7, 9, 30);
+      final container = await loaded(at: at);
+
+      expect(container.read(accountsUpdatedAtProvider), at);
+    });
+
+    test('is null before any successful fetch has ever landed', () async {
+      // Also the state of an install whose cached accounts body predates the
+      // timestamp key — the label then hides rather than inventing a time.
+      final container = await loaded();
+
+      expect(container.read(accountsUpdatedAtProvider), isNull);
+    });
+  });
+
+  group('category drill-down', () {
+    final now = DateTime.now();
+    final thisMonth = DateTime(now.year, now.month);
+    final lastMonth = DateTime(now.year, now.month - 1);
+
+    Future<ProviderContainer> loaded(List<SheetTransaction> txs) async {
+      final container = ProviderContainer(overrides: [
+        sheetsRepositoryProvider.overrideWithValue(
+          _FakeRepo(
+            cached: txs,
+            fetchResults: [Success(txs)],
+            accountsResult: const Success(
+              [SheetAccount(name: 'BoA', currency: 'KRW')],
+            ),
+          ),
+        ),
+      ]);
+      addTearDown(container.dispose);
+      await container.read(transactionsProvider.future);
+      // accountCurrenciesProvider reads accountsProvider, which needs a listener
+      // before it emits.
+      container.listen(accountsProvider, (_, _) {}, fireImmediately: true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      return container;
+    }
+
+    test('categoryTransactionsProvider returns only that category, this month',
+        () async {
+      final container = await loaded([
+        _tx('BoA',
+            date: thisMonth,
+            amount: -10,
+            category: TransactionCategory.food,
+            rowIndex: 1),
+        _tx('BoA',
+            date: thisMonth,
+            amount: -20,
+            category: TransactionCategory.travel,
+            rowIndex: 2),
+        // Right category, wrong month.
+        _tx('BoA',
+            date: lastMonth,
+            amount: -30,
+            category: TransactionCategory.food,
+            rowIndex: 3),
+      ]);
+
+      final rows = container.read(categoryTransactionsProvider(
+        (category: TransactionCategory.food, currency: 'KRW'),
+      ));
+
+      expect(rows.map((t) => t.rowIndex), [1]);
+    });
+
+    test('categoryTrendProvider looks outside the selected month', () async {
+      final container = await loaded([
+        _tx('BoA',
+            date: thisMonth, amount: -10, category: TransactionCategory.food),
+        _tx('BoA',
+            date: lastMonth, amount: -30, category: TransactionCategory.food),
+      ]);
+
+      final trend = container.read(categoryTrendProvider(
+        (category: TransactionCategory.food, currency: 'KRW'),
+      ));
+
+      // The month list is scoped to one month; the trend deliberately is not.
+      expect(trend, hasLength(12));
+      expect(trend.last.amount, 10);
+      expect(trend[10].amount, 30);
+    });
+
+    test('the trend window follows the selected month', () async {
+      final container = await loaded([
+        _tx('BoA',
+            date: lastMonth, amount: -30, category: TransactionCategory.food),
+      ]);
+      container.read(selectedMonthProvider.notifier).shift(-1);
+
+      final trend = container.read(categoryTrendProvider(
+        (category: TransactionCategory.food, currency: 'KRW'),
+      ));
+
+      expect(trend.last.month, lastMonth);
+      expect(trend.last.amount, 30);
     });
   });
 }

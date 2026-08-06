@@ -38,4 +38,7 @@ abstract class ISheetsRepository {
 
   /// When the cached dashboard snapshot was fetched from the sheet.
   DateTime? cachedDashboardAt();
+
+  /// When the cached accounts were fetched from the sheet.
+  DateTime? cachedAccountsAt();
 }

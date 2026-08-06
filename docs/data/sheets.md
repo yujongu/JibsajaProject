@@ -205,9 +205,11 @@ account's currency — `₩12,500` (no decimals) or `$1,234.56`. An unrecognized
 code is prefixed literally (`EUR 12.5`). When the account is **absent from this
 tab** or its `Currency` cell is **blank**, the amount renders as a bare,
 unlabelled number — the same as before this tab was read at all. An unmarked row
-is therefore a visible hint that the account is missing here. The formatter is
-`money()` in `presentation/shared/utils/money.dart`, shared by the Transactions
-list and the Accounts page so both label an amount identically.
+is therefore a visible hint that the account is missing here — **or** that this
+tab has not been refetched since the account was added; refreshing Transactions
+refetches it too (see below). The formatter is `money()` in
+`presentation/shared/utils/money.dart`, shared by the Transactions list and the
+Accounts page so both label an amount identically.
 
 The sheet mixes currencies in one `Amount` column, so the summary card's
 Spending / Net invested totals still add KRW and USD together. Per-currency
@@ -232,6 +234,27 @@ cached grid. Read-only, like the rest of that tab.
 A blank `Current Balance` cell renders as an em dash, not `₩0` — 0 is a real
 balance (a paid-off card) and must stay distinguishable from "the sheet
 didn't say". There are no section totals: the page is a per-account list only.
+
+The page carries the shared `Updated …` caption, sourced from
+`accountsUpdatedAtProvider` → `cachedAccountsAt()` →
+`SheetsLocalCache.accountsTimestamp()`. A body cached before that timestamp key
+existed reads as null, so the caption hides until the next successful fetch
+rather than showing a wrong time.
+
+### Which refresh refetches what
+
+Each page refreshes its own data — three separate GETs, so one refresh does not
+trigger the others. The **one exception** is the Transactions page, which
+invalidates `accountsProvider` alongside `transactionsProvider`
+(`_refresh` in `sheet_view_page.dart`): those currencies label every amount on
+that page, so a refresh that skipped them could never resolve a row showing a
+bare number — visiting another tab or relaunching was previously the only way.
+
+| Refresh on | Refetches |
+| :-- | :-- |
+| Dashboard | `DashboardDB1` only — it shares no data with the others |
+| Accounts | `Accounts` only (which also re-labels the Transactions list) |
+| Transactions | Transactions **and** `Accounts` |
 
 ## Account names
 The add-row form's account picker is **derived from the Transactions tab** —

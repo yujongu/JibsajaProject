@@ -6,6 +6,7 @@ import 'package:jibsaja/domain/entities/sheet_transaction.dart';
 import 'package:jibsaja/domain/entities/transaction_category.dart';
 import 'package:jibsaja/domain/entities/transaction_type.dart';
 import 'package:jibsaja/presentation/extensions/transaction_category_ui.dart';
+import 'package:jibsaja/presentation/pages/category/category_detail_page.dart';
 import 'package:jibsaja/presentation/pages/sheet/sheet_view_page.dart';
 import 'package:jibsaja/presentation/providers/sheets_providers.dart';
 
@@ -182,10 +183,37 @@ void main() {
     expect(wedding, TransactionCategory.wedding.color(false));
     expect(food, isNot(wedding));
   });
+
+  testWidgets('tapping a category bar opens that category', (tester) async {
+    final now = DateTime.now();
+    await _pumpPage(tester, [
+      SheetTransaction(
+        date: DateTime(now.year, now.month, 1),
+        account: 'BoA',
+        type: TransactionType.purchase,
+        category: TransactionCategory.travel,
+        description: 'Flight',
+        amount: -186000,
+        rowIndex: 0,
+      ),
+    ]);
+
+    // The 14px icon is the bar's; the 20px one belongs to the row below it.
+    final bar = find.byWidgetPredicate(
+      (w) => w is Icon && w.icon == Icons.flight_rounded && w.size == 14,
+    );
+    expect(bar, findsOneWidget);
+
+    await tester.tap(bar);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CategoryDetailPage), findsOneWidget);
+    expect(find.text('Last 12 months'), findsOneWidget);
+  });
 }
 
-/// Color of the 20px leading icon in a transaction row. The summary card's
-/// category bars draw the same [IconData] at 14px, so the size disambiguates.
+/// Color of the 20px leading icon in a transaction row. The category bars in
+/// the summary card draw the same [IconData] at 14px, so the size disambiguates.
 Color _tileIconColor(WidgetTester tester, IconData data) {
   final icons = tester
       .widgetList<Icon>(find.byIcon(data))
