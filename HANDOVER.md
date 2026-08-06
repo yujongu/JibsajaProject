@@ -1,10 +1,119 @@
 # HANDOVER
 
 ## Current Milestone
+**Appearance setting: System / Light / Dark, persisted (2026-08-07).** Analyzer
+clean, **167/167 tests**. Sits directly on `06bd23b`, which had already committed
+everything below it.
+
+The ask was "add a dark mode light mode option in the settings". The finding worth
+recording: **both themes already existed and were complete.** `AppTheme.light` /
+`AppTheme.dark` are both fully built out and all ~18 presentation files already
+branch on `Theme.of(context).brightness`. The only thing missing was *user
+control* — `main.dart:41` hardcoded `themeMode: ThemeMode.system`, so the OS was
+the sole way to change appearance. **No widget was repainted.**
+
+### Context & Decisions
+1. **⭐ Three options, not a two-way toggle** (user's pick). System is the default,
+   so an install that never touches the setting behaves exactly as before. A
+   Light/Dark-only toggle would have been a regression: it forces a choice on
+   first launch and permanently stops following the OS.
+2. **⭐ No theme flash on launch, for free.** `sharedPreferencesProvider` is
+   already overridden in `main()` *before* `runApp` (`main.dart:23-27`), so
+   `ThemeModeNotifier.build()` reads the pinned mode synchronously and the first
+   frame is already correct. This is the reason the store is sync (no `Future`,
+   no `AsyncValue`) — worth preserving if this ever moves off SharedPreferences.
+3. **Persist first, then set state** — copied verbatim from
+   `SheetProfilesNotifier.switchTo`. The store is the source of truth across
+   restarts.
+4. **`ThemeModeStore` lives in `lib/data/` and imports Flutter's `ThemeMode`.**
+   The layer rules only forbid Flutter in `lib/domain/`, and `ThemeMode` is a
+   plain enum — a domain entity + repository interface for one persisted enum
+   would have been ceremony. Import is narrowed with `show ThemeMode`.
+5. **A segmented card, not three stacked tiles** (user's pick from a mockup).
+   The codebase has **no `Switch`, `SegmentedButton`, `Radio` or `ChoiceChip`
+   anywhere** — the established idiom is a tappable card. Three full-width
+   check-circle tiles (the `_ProfileTile` shape) would have cost 3× the vertical
+   space above the sheet picker, which is the page's actual subject.
+6. **No SnackBar on tap.** Every other Settings action confirms with one, but
+   here the whole app repainting *is* the confirmation.
+7. **Read-only.** No sheet contract, no network, no POST path.
+
+### What shipped
+- **Data** (new `datasources/theme_mode_store.dart`): ~20 lines, modelled on
+  `sheet_profile_store.dart` — `const` ctor over `SharedPreferences`, versioned
+  key `theme.mode.v1`, sync `read()` via a switch on the stored string with
+  `ThemeMode.system` as the fallback for both absent *and* unrecognized values,
+  `write()` storing `mode.name`.
+- **Presentation** (new `providers/theme_providers.dart`): `themeModeStoreProvider`
+  + `ThemeModeNotifier extends Notifier<ThemeMode>` + `themeModeProvider`,
+  mirroring `sheet_profile_providers.dart` line for line including the
+  `if (mode == state) return;` no-op guard.
+- **Presentation** (`main.dart`): `JibsajaApp` is now a `ConsumerWidget`;
+  `themeMode: ref.watch(themeModeProvider)`. `theme:`/`darkTheme:` untouched.
+- **Presentation** (`settings_page.dart`): a new **Appearance** section placed
+  *above* Active sheet, reusing the file-private `_SectionLabel`. New private
+  `_ThemeModeCard` (a `GlassCard` with `EdgeInsets.all(6)` and no `onTap`) over
+  three `_ThemeSegment`s — `Expanded` + `Material`/`InkWell` reusing `GlassCard`'s
+  own splash/highlight alphas, selected state = `AppColors.primary` at 0.12 alpha
+  with a w700 primary label.
+- **Tests** (+8 → 167): `theme_mode_store_test.dart` (default, a loop
+  round-tripping all three `ThemeMode.values`, unknown value → system) and
+  `theme_providers_test.dart` (default, seeds from store, `set` updates state
+  **and** a fresh container over the same prefs reads it back).
+
+### The 'Gravel' (this session)
+- **Not verified on-device.** No APK built. A settings control is judged by how
+  it looks and feels — see Next Immediate Step.
+- **⭐ `ThemeMode.system` looks identical to whichever of Light/Dark the OS is
+  currently on.** The segment highlight is the *only* thing distinguishing
+  "following the OS, which is dark" from "pinned to Dark". There is no "System
+  (Dark)" hint under the label. Acceptable, but it is the one genuinely ambiguous
+  state on the page.
+- **The status bar is handled, the nav bar is not.** `appBarTheme.systemOverlayStyle`
+  flips with the theme so the status bar icons are right; the Android navigation
+  bar has never been styled by this app and is unchanged by the switch.
+- **No animated transition.** Switching repaints instantly. `MaterialApp` does
+  cross-fade `theme`↔`darkTheme` changes, but pinning between light and dark is
+  effectively a hard cut in practice — this has not been watched on a device.
+- **`_ThemeSegment` is a `ConsumerWidget` purely to reach `ref.read` in `onTap`.**
+  It could take a callback from its parent instead; three segments did not justify
+  the threading.
+- **The segments have no `Semantics` selected-state.** Screen-reader users hear
+  three unrelated buttons rather than a group with one selected. The whole app has
+  no explicit semantics anywhere, so this is consistent, not a new gap.
+- Pre-existing and untouched: the stray `Color(0xFFF59E0B)` at
+  `add_transaction_sheet.dart:467` duplicating `AppColors.warning`; the three
+  secondary/cyan literals in `app_theme.dart:19-22` that never made it into
+  `AppColors`; dead `groupByMonth()` + `MonthGroup`; dead `currency_formatter.dart`;
+  `_NetCaption` still renders a zero net flow as `+0`.
+
+## Next Immediate Step
+- **`flutter run`** (or build an APK) → Dashboard app bar → **Settings**:
+  - ⭐ The **Appearance** card sits above Active sheet with **System** selected on
+    a fresh install, and the app looks exactly as it did before.
+  - Tap **Light**: the whole app turns light immediately — **including the custom
+    bottom nav** (`_BottomNav` reads `Theme.of(context).brightness`, so it should
+    follow) and the status bar icons. Tap **Dark**, then **System**.
+  - **Kill and relaunch on a pinned mode**: it comes up in that mode with **no
+    flash** of the other theme on the first frame. That is the acceptance
+    criterion for decision 2.
+  - With the app pinned to **Light**, toggle the **OS** to dark: the app must
+    **not** move. Then switch the app to System and toggle the OS again: it must
+    follow.
+  - Check the pinned-Light look on the screens that were only ever seen in dark:
+    the **category trend chart** and **drill-down header** from the milestone
+    below, and the Accounts page.
+  - **Do not tap Add while verifying** — this change is read-only.
+- ~~Then commit.~~ **Done** — committed and pushed to `main` (`main.dart`,
+  `settings_page.dart`, the two new `lib/` files, the two new test files,
+  `HANDOVER.md`). Only the on-device verification above is outstanding.
+
+## Previous Milestone
 **Category drill-down: tap a bar to see the transactions behind it
-(2026-08-07).** Analyzer clean, **159/159 tests**. **Uncommitted**, and it sits
-on top of the also-uncommitted Accounts-freshness work below — the two overlap in
-`sheet_view_page.dart`, `sheets_providers.dart` and their two test files.
+(2026-08-07).** Analyzer clean, **159/159 tests**. **Committed as `06bd23b`**,
+together with the Accounts-freshness work below — the two overlapped in
+`sheet_view_page.dart`, `sheets_providers.dart` and their two test files, so they
+shipped in one commit rather than being split.
 
 The summary card said **how much** went to 식비 in August but gave no way to
 reach the rows behind that number. `_CategoryBar` was inert — nothing on the card

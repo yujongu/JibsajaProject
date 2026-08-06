@@ -7,6 +7,7 @@ import 'presentation/pages/accounts/accounts_page.dart';
 import 'presentation/pages/dashboard/dashboard_page.dart';
 import 'presentation/pages/sheet/sheet_view_page.dart';
 import 'presentation/providers/sheets_providers.dart';
+import 'presentation/providers/theme_providers.dart';
 import 'presentation/shared/theme/app_colors.dart';
 import 'presentation/shared/theme/app_theme.dart';
 
@@ -28,17 +29,17 @@ void main() async {
   ));
 }
 
-class JibsajaApp extends StatelessWidget {
+class JibsajaApp extends ConsumerWidget {
   const JibsajaApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       title: 'Jibsaja',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      themeMode: ref.watch(themeModeProvider),
       home: const HomeShell(),
     );
   }

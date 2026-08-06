@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/entities/sheet_profile.dart';
 import '../../providers/sheet_profile_providers.dart';
+import '../../providers/theme_providers.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/form_sheet_widgets.dart';
 import '../../shared/widgets/glass_button.dart';
@@ -26,6 +27,10 @@ class SettingsPage extends ConsumerWidget {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
+            _SectionLabel('Appearance', isDark: isDark),
+            const SizedBox(height: 8),
+            const _ThemeModeCard(),
+            const SizedBox(height: 12),
             _SectionLabel('Active sheet', isDark: isDark),
             const SizedBox(height: 8),
             for (final profile in profiles.all) ...[
@@ -57,6 +62,98 @@ class SettingsPage extends ConsumerWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Three-segment appearance picker. Follows the OS by default; picking Light
+/// or Dark pins the app to that theme.
+class _ThemeModeCard extends ConsumerWidget {
+  const _ThemeModeCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(themeModeProvider);
+
+    return GlassCard(
+      padding: const EdgeInsets.all(6),
+      child: Row(
+        children: [
+          _ThemeSegment(
+            mode: ThemeMode.system,
+            label: 'System',
+            icon: Icons.brightness_auto_rounded,
+            isSelected: selected == ThemeMode.system,
+          ),
+          _ThemeSegment(
+            mode: ThemeMode.light,
+            label: 'Light',
+            icon: Icons.light_mode_rounded,
+            isSelected: selected == ThemeMode.light,
+          ),
+          _ThemeSegment(
+            mode: ThemeMode.dark,
+            label: 'Dark',
+            icon: Icons.dark_mode_rounded,
+            isSelected: selected == ThemeMode.dark,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeSegment extends ConsumerWidget {
+  const _ThemeSegment({
+    required this.mode,
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+  });
+
+  final ThemeMode mode;
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final radius = BorderRadius.circular(11);
+    final color = isSelected
+        ? AppColors.primary
+        : (isDark ? AppColors.textTertiary : AppColors.textTertiaryLight);
+
+    return Expanded(
+      child: Material(
+        color: isSelected
+            ? AppColors.primary.withValues(alpha: 0.12)
+            : Colors.transparent,
+        borderRadius: radius,
+        child: InkWell(
+          onTap: () => ref.read(themeModeProvider.notifier).set(mode),
+          borderRadius: radius,
+          splashColor: AppColors.primary.withValues(alpha: 0.06),
+          highlightColor: AppColors.primary.withValues(alpha: 0.03),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Column(
+              children: [
+                Icon(icon, size: 18, color: color),
+                const SizedBox(height: 5),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
