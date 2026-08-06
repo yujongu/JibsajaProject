@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'presentation/pages/accounts/accounts_page.dart';
 import 'presentation/pages/dashboard/dashboard_page.dart';
 import 'presentation/pages/sheet/sheet_view_page.dart';
 import 'presentation/providers/sheets_providers.dart';
@@ -43,8 +44,9 @@ class JibsajaApp extends StatelessWidget {
   }
 }
 
-/// Two-tab shell: Dashboard and Transactions. Uses an [IndexedStack] so each
-/// tab keeps its scroll position and provider state when switching.
+/// Three-tab shell: Dashboard, Accounts and Transactions. Uses an
+/// [IndexedStack] so each tab keeps its scroll position and provider state when
+/// switching.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -55,7 +57,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
-  static const _pages = [DashboardPage(), SheetViewPage()];
+  static const _pages = [DashboardPage(), AccountsPage(), SheetViewPage()];
 
   @override
   Widget build(BuildContext context) {
@@ -112,11 +114,18 @@ class _BottomNav extends StatelessWidget {
                 onTap: () => onTap(0),
               ),
               _NavItem(
-                icon: Icons.receipt_long_rounded,
-                label: 'Transactions',
+                icon: Icons.account_balance_rounded,
+                label: 'Accounts',
                 selected: index == 1,
                 isDark: isDark,
                 onTap: () => onTap(1),
+              ),
+              _NavItem(
+                icon: Icons.receipt_long_rounded,
+                label: 'Transactions',
+                selected: index == 2,
+                isDark: isDark,
+                onTap: () => onTap(2),
               ),
             ],
           ),

@@ -1,9 +1,132 @@
 # HANDOVER
 
 ## Current Milestone
+**New Accounts tab — credit-card debt and bank balances (2026-08-06).** Analyzer
+clean, **132/132 tests**, release APK built. **Uncommitted.**
+
+The app had two tabs. Card debt and bank cash were invisible in it: the sheet's
+`Accounts` tab was already fetched on every launch, but only two of its columns
+were parsed (`Account Name`, `Currency`) and only to prefix transaction amounts
+with ₩ or $. Neither figure was on the Dashboard either — `DashboardDB1`'s
+`총 자산` is cash + stocks and explicitly excludes card debt.
+
+There is now a third tab, **Accounts**, between Dashboard and Transactions,
+listing every `Accounts` row whose `Type` is `Credit` or `Bank` with its
+`Current Balance`.
+
+### Context & Decisions
+1. **⭐ Zero new I/O.** `accountsProvider` already does `GET ?sheet=Accounts` and
+   caches the raw grid; this reads two more columns out of a response the app
+   was already holding. No repository change, no cache change, no `Code.gs`
+   change, no redeploy. The whole feature is **read-only**.
+2. **⭐ Balances render exactly as the sheet stores them, sign included** (user's
+   pick over normalizing card debt to a positive magnitude). If column G holds
+   `-512300` the app shows `₩-512,300`. The `Normal Sign` column is deliberately
+   *not* consulted. Same "don't guess" rule that makes an unknown currency
+   render as a bare number — and it means the on-device check is meaningful
+   rather than confirming an assumption the code baked in.
+3. **`currentBalance` is `double?`, not `double`.** A blank cell must not read as
+   `0`, which would look like a paid-off card. Renders as an em dash.
+4. **`Type` and `Current Balance` are OPTIONAL headers**, unlike `Account Name` /
+   `Currency` which still gate the parse. This is the one real risk the change
+   carried: making the new headers mandatory would mean a sheet without them
+   returns `const []`, silently stripping the currency symbol from **every**
+   Transactions row. There is a test pinning exactly that.
+5. **Brokerage and Crypto are omitted silently** (user's pick over a "6 others
+   not shown" footer). Brokerage is already on the Dashboard; a footer counting
+   rows the user never asked to see is noise.
+6. **No section totals** (user's pick) — a per-account list only. Note that a
+   total would have to be per-currency anyway; the app takes no FX feed, so KRW
+   and USD can't be summed into one figure.
+7. **`_money`/`_num` lifted out of `sheet_view_page.dart`** into
+   `presentation/shared/utils/money.dart` as `money()` / `plainNumber()`. The
+   new page must label amounts identically to the Transactions list, and copying
+   them would have made this the **third** currency formatter in the tree
+   (`currency_formatter.dart` is the dead second one — left alone, and *not*
+   reused: it truncates via `toInt()` and defaults unknown codes to ₩). This
+   also finally gives `_money` the direct test earlier sessions flagged as
+   missing. Behavior is unchanged; the ~10 call sites were renamed mechanically.
+
+### What shipped
+- **Domain** (`sheet_account.dart`): `SheetAccount` gained `type` (String,
+  defaulted `''`) and `currentBalance` (`double?`). Both are **defaulted**, so
+  the five existing construction sites — all in tests — kept compiling untouched.
+  New `SheetAccountList.ofType(String)` extension, mirroring
+  `TransactionAggregates` in `transaction_summary.dart`: case- and
+  whitespace-insensitive, so `' bank '` in the sheet still matches.
+- **Data** (`sheet_account_model.dart`): the two new headers anchored in the same
+  header row the parser already located, plus `_number(dynamic)` — `num` →
+  `toDouble()`, `String` → strip to digits/`-`/`.` then `tryParse` (covers a
+  balance pasted as `'₩1,234.50'`), anything else → null.
+- **Presentation**: new `pages/accounts/accounts_page.dart` — same
+  `GradientBackground` → `FeatureScaffold` → `RefreshIndicator` → `.when()`
+  shape as the other two pages, including the `async.isLoading` guard in the
+  error arm. Rows are `GlassCard`s reusing `AccountMonogram` from
+  `account_picker_field.dart`, so an account carries the same identity color it
+  has in the add-row picker. New `shared/utils/money.dart`.
+- **Shell** (`main.dart`): `_pages` is now three entries and a third `_NavItem`
+  (`Icons.account_balance_rounded`) sits at index 1; **Transactions moved from
+  index 1 to 2**. `IndexedStack` already preserves per-tab state.
+- **Docs** (`docs/data/sheets.md`): `Type`/`Current Balance` flipped to ✅ with
+  the gating-vs-optional header rule spelled out; new "Accounts page" section;
+  the stale `총 자산` note about those columns being unparsed corrected.
+- **Tests** (+19 → 132): 5 new model cases (live layout, text balance, blank →
+  null, **missing optional headers still yield accounts**, ragged rows) and 3
+  for `ofType`; new `money_test.dart` (6); new
+  `test/presentation/pages/accounts_page_test.dart` (5) — stubs
+  `accountsProvider` with an override, so no repository is constructed.
+
+### The 'Gravel' (this session)
+- **Not verified on-device yet.** APK built, not installed — see Next Immediate
+  Step. **The sign question (decision 2) can only be settled there.**
+- **`money()` puts the minus *after* the symbol**: `₩-512,300`, not `−₩512,300`.
+  Pre-existing and shipped — every negative-amount row on the Transactions list
+  already reads this way — so it was left alone, but a wall of negative card
+  balances is where it will look worst. `money_test.dart` pins the current
+  behavior, so changing it is a one-line edit plus one test.
+- **`ofType` matches the English strings `'Credit'` / `'Bank'` literally.** If a
+  Type cell is ever renamed (or typo'd) in the sheet, that account silently
+  vanishes from the page with no trace — the same failure mode as the
+  account-name currency join, and decision 5 means there is no footer count to
+  hint at it. The two constants are at the top of `accounts_page.dart`.
+- **The page has no updated-at label**, unlike the other two — `cachedAccountsAt()`
+  was never added to the repository (noted when the tab was first read in
+  `0af12d8`). The syncing bar under the app bar is the only freshness signal.
+- **`_SectionLabel` is duplicated** from `dashboard_page.dart` (private there).
+  ~12 lines of styled `Text`; lifting it to `shared/widgets/` would have touched
+  the Dashboard for no behavior change.
+- Pre-existing and untouched: dead `groupByMonth()` + `MonthGroup` in
+  `transaction_summary.dart`; dead `currency_formatter.dart`; the two duplicate
+  `_typeColor` functions; the Gradle KGP deprecation warnings on every APK
+  build; `_NetCaption` still renders a zero net flow as `+0`.
+
+## Next Immediate Step
+- **Install `build/app/outputs/flutter-apk/app-release.apk`** and open the new
+  **Accounts** tab against the **Real** sheet:
+  - ⭐ **Every balance matches column G exactly, sign and all.** This is the
+    decision the code deliberately left open — if credit balances read positive
+    (or negative) and that looks wrong, say so and it is a one-line fix in
+    `_AccountRow`, not a re-plan.
+  - Every `Credit` and `Bank` account from the sheet appears; **no** Brokerage or
+    Crypto row does. An account missing from the page means its `Type` cell is
+    spelled something else (see Gravel).
+  - An account with a blank `Current Balance` shows **—**, not `₩0`.
+  - Tab order is Dashboard / Accounts / Transactions, and all three keep their
+    scroll position when switching away and back.
+  - Airplane mode → relaunch: the cached grid still populates the tab.
+  - **Transactions amounts still carry ₩ / $** — this is the regression check for
+    both the formatter move and the new optional headers.
+  - **Do not tap Add while verifying** — the whole change is read-only.
+- Then commit: `sheet_account.dart`, `sheet_account_model.dart`,
+  `money.dart`, `accounts_page.dart`, `sheet_view_page.dart`, `main.dart`,
+  `docs/data/sheets.md`, the three test files, `HANDOVER.md`.
+- Still outstanding from the previous milestone: the sell-only / buy-only month
+  checks below (that code is committed; only its on-device pass is left).
+
+## Previous Milestone
 **Trade "Net" line removed; Divested is now "Sold" and reads as cash in
 (2026-08-04).** Analyzer clean, **113/113 tests**, release APK built.
-**Uncommitted.**
+**Committed as `142ccd9`** (the "Uncommitted" note here was stale).
 
 The user's report: buying makes `Invested` climb (wanted), but selling makes
 `Divested` climb *and* drives the `Net` line to the exact negation of it — a

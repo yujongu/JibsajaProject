@@ -10,33 +10,11 @@ import '../../../domain/entities/transaction_type.dart';
 import '../../extensions/transaction_category_ui.dart';
 import '../../providers/sheets_providers.dart';
 import '../../shared/theme/app_colors.dart';
+import '../../shared/utils/money.dart';
 import '../../shared/widgets/error_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
 import '../../shared/widgets/updated_at_label.dart';
 import '../../widgets/add_transaction_sheet.dart';
-
-/// Formats a bare number with grouping and up to 2 decimals. No currency
-/// symbol — used for the quantity/price fragment, which is unit-less.
-String _num(double v) => NumberFormat('#,##0.##', 'en_US').format(v);
-
-/// Formats a row's amount, prefixed with its account's currency from the
-/// sheet's `Accounts` tab. A [currency] of null or empty means the sheet does
-/// not say — the amount then renders unlabelled, exactly as it always has, so
-/// an unmarked row is a visible hint that the account is missing from that tab.
-String _money(double v, String? currency) {
-  switch (currency) {
-    case 'KRW':
-      // The won has no minor unit, so decimals would be noise.
-      return '₩${NumberFormat('#,##0', 'en_US').format(v)}';
-    case 'USD':
-      return '\$${_num(v)}';
-    case null || '':
-      return _num(v);
-    default:
-      // An unfamiliar code is still labelled honestly rather than guessed at.
-      return '$currency ${_num(v)}';
-  }
-}
 
 class SheetViewPage extends ConsumerWidget {
   const SheetViewPage({super.key});
@@ -443,7 +421,7 @@ class _CurrencySection extends StatelessWidget {
             Expanded(
               child: _StatBlock(
                 label: 'Spending',
-                value: _money(summary.totalSpending, code),
+                value: money(summary.totalSpending, code),
                 valueColor: AppColors.negative,
                 isDark: isDark,
               ),
@@ -452,7 +430,7 @@ class _CurrencySection extends StatelessWidget {
             Expanded(
               child: _StatBlock(
                 label: 'Income',
-                value: _money(summary.totalIncome, code),
+                value: money(summary.totalIncome, code),
                 valueColor: AppColors.positive,
                 isDark: isDark,
               ),
@@ -475,7 +453,7 @@ class _CurrencySection extends StatelessWidget {
               Expanded(
                 child: _StatBlock(
                   label: 'Invested',
-                  value: _money(summary.invested, code),
+                  value: money(summary.invested, code),
                   valueColor: AppColors.primary,
                   isDark: isDark,
                 ),
@@ -485,7 +463,7 @@ class _CurrencySection extends StatelessWidget {
                 child: _StatBlock(
                   label: 'Sold',
                   // Cash arriving, same as Income — not a warning.
-                  value: _money(summary.divested, code),
+                  value: money(summary.divested, code),
                   valueColor: AppColors.positive,
                   isDark: isDark,
                 ),
@@ -547,7 +525,7 @@ class _NetCaption extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text(
-          '$sign${_money(value.abs(), currency)}',
+          '$sign${money(value.abs(), currency)}',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
@@ -647,7 +625,7 @@ class _CategoryBar extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              _money(spending.amount, currency),
+              money(spending.amount, currency),
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -714,7 +692,7 @@ class _TransactionTile extends StatelessWidget {
       tx.account,
       DateFormat('MMM d, yyyy').format(tx.date),
       if (!isPurchase && tx.quantity != null && tx.price != null)
-        '${_num(tx.quantity!)} @ ${_num(tx.price!)}',
+        '${plainNumber(tx.quantity!)} @ ${plainNumber(tx.price!)}',
     ];
 
     return Container(
@@ -787,7 +765,7 @@ class _TransactionTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                _money(tx.computedAmount, currency),
+                money(tx.computedAmount, currency),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,

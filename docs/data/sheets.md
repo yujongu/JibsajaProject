@@ -170,8 +170,9 @@ cell the sheet serialises as a bogus `1904-...` date string.
 
 > **Net-worth scope:** `총 자산` = `총 보유 현금` + `총 보유 주식` only. Crypto
 > (업비트/빗썸) and card debt live in the **`Accounts`** tab and are *not* in
-> `DashboardDB1`'s totals. To include them later, sum `Current Balance` by
-> `Type` from that tab (see below).
+> `DashboardDB1`'s totals. The **Accounts page** now lists the card and bank
+> balances from that tab (see below), but it does not fold them into any
+> net-worth figure — no total anywhere in the app combines the two tabs.
 
 ## Accounts tab — `Accounts`
 
@@ -181,30 +182,56 @@ only** — the app never appends to or edits this tab.
 | Column | Read by the app? | Notes |
 | :-- | :-- | :-- |
 | `Account Name` | ✅ | Joined against a transaction row's Account column |
-| `Type` | — | |
+| `Type` | ✅ | `Credit` \| `Bank` \| `Brokerage` \| `Crypto`; matched case- and whitespace-insensitively by `SheetAccountList.ofType` |
 | `Institution` | — | |
 | `Currency` | ✅ | ISO code (`KRW`, `USD`); read upper-cased |
 | `Include?` | — | |
 | `Starting Balance` | — | |
-| `Current Balance` | — | The value a future net-worth extension would sum |
-| `Normal Sign` | — | |
+| `Current Balance` | ✅ | Card debt / bank cash, listed by the Accounts page. Blank or unparseable reads as **null**, never 0 |
+| `Normal Sign` | — | **Not read.** The app applies no sign convention of its own — see below |
 
 The parser **anchors on the header text**, not on column letters: it finds the
-`Account Name` cell, then `Currency` in that same header row, so inserting a
-column does not shift the mapping. If either header is missing the parse yields
-an empty list rather than an error — the tab only supplies labels, so it must
-never break the Transactions page.
+`Account Name` cell, then the others in that same header row, so inserting a
+column does not shift the mapping.
+
+`Account Name` and `Currency` **gate** the parse — if either header is missing it
+yields an empty list rather than an error, since the tab must never break the
+Transactions page. `Type` and `Current Balance` are **optional**: a tab without
+those headers still yields accounts (with a blank type and a null balance), so
+adding them could not regress the currency labels that predate them.
 
 **Currency display.** The Transactions list prefixes each row's amount with its
 account's currency — `₩12,500` (no decimals) or `$1,234.56`. An unrecognized
 code is prefixed literally (`EUR 12.5`). When the account is **absent from this
 tab** or its `Currency` cell is **blank**, the amount renders as a bare,
 unlabelled number — the same as before this tab was read at all. An unmarked row
-is therefore a visible hint that the account is missing here.
+is therefore a visible hint that the account is missing here. The formatter is
+`money()` in `presentation/shared/utils/money.dart`, shared by the Transactions
+list and the Accounts page so both label an amount identically.
 
 The sheet mixes currencies in one `Amount` column, so the summary card's
 Spending / Net invested totals still add KRW and USD together. Per-currency
 totals are deliberately not implemented.
+
+## Accounts page
+
+Lists the `Accounts` tab's `Current Balance` for rows whose `Type` is **`Credit`**
+(card debt) or **`Bank`** (cash on hand), grouped under two headings. `Brokerage`
+and `Crypto` rows are omitted — brokerage holdings are already on the Dashboard.
+A type the sheet spells any other way simply does not appear.
+
+Costs **no extra network call**: `accountsProvider` is already fetched for the
+currency labels above, and the page reads two more columns out of the same
+cached grid. Read-only, like the rest of that tab.
+
+> **Balances render exactly as the sheet stores them, sign included.** If column
+> G holds a card balance as `-512300`, the app shows `₩-512,300`. There is no
+> `abs()` and no sign flipping, so the `Normal Sign` column is not consulted —
+> the same "don't guess" rule that makes an unknown currency render bare.
+
+A blank `Current Balance` cell renders as an em dash, not `₩0` — 0 is a real
+balance (a paid-off card) and must stay distinguishable from "the sheet
+didn't say". There are no section totals: the page is a per-account list only.
 
 ## Account names
 The add-row form's account picker is **derived from the Transactions tab** —
