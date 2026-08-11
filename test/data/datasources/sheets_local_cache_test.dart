@@ -44,6 +44,7 @@ void main() {
       real.writeTransactions('{"rows": []}');
       real.writeDashboard('{"grid": []}');
       real.writeAccounts('{"grid": []}');
+      real.writeHoldings('{"grid": []}');
       test.writeTransactions('{"rows": []}');
 
       real.evict();
@@ -51,6 +52,7 @@ void main() {
       expect(real.readTransactions(), isNull);
       expect(real.readDashboard(), isNull);
       expect(real.readAccounts(), isNull);
+      expect(real.readHoldings(), isNull);
       expect(real.transactionsTimestamp(), isNull);
       expect(real.dashboardTimestamp(), isNull);
       // The other slot is untouched.
@@ -91,6 +93,29 @@ void main() {
       // caption would date a response that is no longer there.
       real.evict();
       expect(real.accountsTimestamp(), isNull);
+    });
+
+    test('holdings round-trip, stay namespaced, and carry a timestamp',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final real = SheetsLocalCache(prefs, profileId: 'real');
+      final test = SheetsLocalCache(prefs, profileId: 'test');
+
+      expect(real.readHoldings(), isNull);
+      expect(real.holdingsTimestamp(), isNull);
+
+      real.writeHoldings('{"grid": [["Symbol","Market Value"]]}');
+
+      expect(real.readHoldings(), '{"grid": [["Symbol","Market Value"]]}');
+      expect(test.readHoldings(), isNull);
+      expect(prefs.getString('cache.holdings.body.real.v1'), isNotNull);
+      expect(real.holdingsTimestamp(), isNotNull);
+
+      // Re-pointing the slot must drop the timestamp with the body.
+      real.evict();
+      expect(real.readHoldings(), isNull);
+      expect(real.holdingsTimestamp(), isNull);
     });
   });
 }

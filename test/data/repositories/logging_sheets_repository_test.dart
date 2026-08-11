@@ -6,6 +6,7 @@ import 'package:jibsaja/domain/entities/api_call_record.dart';
 import 'package:jibsaja/domain/entities/dashboard_summary.dart';
 import 'package:jibsaja/domain/entities/result.dart';
 import 'package:jibsaja/domain/entities/sheet_account.dart';
+import 'package:jibsaja/domain/entities/sheet_holding.dart';
 import 'package:jibsaja/domain/entities/sheet_transaction.dart';
 import 'package:jibsaja/domain/entities/transaction_category.dart';
 import 'package:jibsaja/domain/entities/transaction_type.dart';
@@ -45,6 +46,13 @@ class _FakeDelegate implements ISheetsRepository {
   DateTime? cachedDashboardAt() => null;
   @override
   DateTime? cachedAccountsAt() => null;
+  @override
+  Future<Result<List<SheetHolding>>> fetchHoldings() async =>
+      const Success([SheetHolding(symbol: 'NVDA', currency: 'USD')]);
+  @override
+  List<SheetHolding>? cachedHoldings() => null;
+  @override
+  DateTime? cachedHoldingsAt() => null;
 }
 
 class _ThrowingStore extends AuditLogStore {
@@ -145,12 +153,15 @@ void main() {
       await repo.fetchTransactions();
       await repo.fetchDashboard();
       await repo.fetchAccounts();
+      await repo.fetchHoldings();
       repo.cachedTransactions();
       repo.cachedDashboard();
       repo.cachedAccounts();
+      repo.cachedHoldings();
       repo.cachedTransactionsAt();
       repo.cachedDashboardAt();
       repo.cachedAccountsAt();
+      repo.cachedHoldingsAt();
 
       expect(store.records(), isEmpty);
     });

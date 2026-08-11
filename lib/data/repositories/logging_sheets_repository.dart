@@ -4,6 +4,7 @@ import '../../domain/entities/api_call_record.dart';
 import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/result.dart';
 import '../../domain/entities/sheet_account.dart';
+import '../../domain/entities/sheet_holding.dart';
 import '../../domain/entities/sheet_transaction.dart';
 import '../../domain/entities/transaction_category.dart';
 import '../../domain/entities/transaction_type.dart';
@@ -44,6 +45,10 @@ class LoggingSheetsRepository implements ISheetsRepository {
       delegate.fetchAccounts();
 
   @override
+  Future<Result<List<SheetHolding>>> fetchHoldings() =>
+      delegate.fetchHoldings();
+
+  @override
   List<SheetTransaction>? cachedTransactions() =>
       delegate.cachedTransactions();
 
@@ -54,6 +59,9 @@ class LoggingSheetsRepository implements ISheetsRepository {
   List<SheetAccount>? cachedAccounts() => delegate.cachedAccounts();
 
   @override
+  List<SheetHolding>? cachedHoldings() => delegate.cachedHoldings();
+
+  @override
   DateTime? cachedTransactionsAt() => delegate.cachedTransactionsAt();
 
   @override
@@ -61,6 +69,9 @@ class LoggingSheetsRepository implements ISheetsRepository {
 
   @override
   DateTime? cachedAccountsAt() => delegate.cachedAccountsAt();
+
+  @override
+  DateTime? cachedHoldingsAt() => delegate.cachedHoldingsAt();
 
   // ── Mutations: delegate, then record ───────────────────────────────────────
 

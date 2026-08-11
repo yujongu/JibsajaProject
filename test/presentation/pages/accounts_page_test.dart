@@ -63,7 +63,7 @@ void main() {
     // No abs(), no sign convention of the app's own — a negative card balance
     // in the sheet reads as a negative here.
     expect(find.text('₩-512,300'), findsOneWidget);
-    expect(find.text(r'$1,842.5'), findsOneWidget);
+    expect(find.text(r'$1,842.50'), findsOneWidget);
   });
 
   testWidgets('omits every other account type', (tester) async {

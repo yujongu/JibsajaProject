@@ -1,6 +1,171 @@
 # HANDOVER
 
 ## Current Milestone
+**New Holdings tab — per-position stocks from the `Holdings` sheet
+(2026-08-11).** Analyzer clean, **229/229 tests** (was 167), release APK built.
+**Committed and pushed to `main`** — only the on-device pass is outstanding.
+
+The app had three tabs and none answered *"which stock am I making money on?"*.
+The Dashboard rolls stocks up into two totals (`보유 미국 주식` / `보유 한국 주식`);
+Transactions shows Buy/Sell rows but never a current position. The sheet's
+`Holdings` tab held the whole per-position picture and had never been read.
+
+There is now a fourth tab, **Holdings** at index 1, listing every position
+ranked by size, with its gain and its share of the portfolio.
+
+### Context & Decisions
+1. **⭐ Zero backend work.** `Code.gs:59` already routes `?sheet=<any tab>`
+   through `readGrid()` with nothing whitelisted, so `?sheet=Holdings` works
+   against the **already-deployed** script. No `Code.gs` edit, no redeploy. The
+   whole feature is client-side and **read-only** — the POST path is untouched.
+2. **⭐ The `Percentage` column (I) is never read.** The user confirmed it is
+   exactly `(G − F) / F`, so `SheetHolding.returnFraction` derives it. Same
+   number, one fewer header that can break, and the derived version returns
+   **null** for a zero cost basis rather than importing a `#DIV/0!`.
+3. **One section per currency, no FX** — the same rule `summarize()` follows.
+   Nothing is ever summed across ₩ and $.
+4. **⭐ The sort control is a table header, chosen from five mocked options.**
+   The first proposal was the `_ThemeModeCard` segmented card lifted from
+   Settings; the user rejected it, correctly — it is a card sitting above cards,
+   containing nothing. `Symbol · Value · Gain · Gain %` has no container at all,
+   is the smallest (~28px), and is the **only** option that carries a
+   *direction*, which is what makes "my worst performer" one tap from the best
+   instead of a scroll to the bottom.
+   - The header **repeats above each section** but reads one shared
+     `holdingOrderProvider`. That is right for a column header (it labels the
+     table under it) and would have been wrong for a floating chip control —
+     which is why the same repetition was listed as a *cost* of the docked
+     option and is not one here.
+   - `Symbol` was labelled `Position` in the mockup. Renamed: in investing
+     "position" means a holding, so "sort by position" reads as *position size*,
+     which is what `Value` already does. Its marker is `A–Z` / `Z–A`, not an
+     arrow — an arrow means nothing on a name column.
+5. **⭐ `money()` now gives USD a fixed 2 decimals** (user's pick). This is the
+   one change that reaches **outside** the new tab — see Gravel.
+6. **Nulls sort last in BOTH directions.** Partition-then-sort, not sort-then-
+   reverse: reversing floats the blank rows to the top, which is the one
+   ordering that is never useful.
+7. **A row counts toward the section totals only if it has both a market value
+   and a cost basis**, so `market − cost == gain` always holds for the figures
+   on the header. A half-valued row is still listed, but gets no bar.
+8. **Dashboard error policy, not the Accounts one.** `_parseAccountsBody`
+   degrades to `const []` because that tab only feeds currency labels elsewhere.
+   Holdings *is* the page, and the likeliest first-run failure is a tab-name
+   mismatch, which Apps Script reports as `{"error": ...}` at **HTTP 200** —
+   rendering that as "no holdings" would be actively misleading.
+
+The two mockups the design was chosen from:
+- Page layout — https://claude.ai/code/artifact/9e96cc75-2485-427a-a283-6e13fea079e0
+- Sort control, five options — https://claude.ai/code/artifact/448092c4-9166-4ae1-b297-702824cd39f6
+
+### What shipped
+- **Domain** (new `sheet_holding.dart`): `SheetHolding` (every numeric field
+  `double?`, per the `SheetAccount.currentBalance` precedent), `isValued`,
+  `returnFraction`; `CurrencyHoldings` modelled on `CurrencySummary` with
+  `share()`; `HoldingSort` / `SortDir` / `HoldingOrder` record + `naturalDir`;
+  `groupByCurrency` and the private `_ordered`, which breaks ties by symbol
+  (`List.sort` is not stable) with the sign applied to the **value** comparison
+  only, so ties stay A–Z in both directions.
+- **Data** (new `sheet_holding_model.dart`): header-anchored `fromGrid` copied
+  from `sheet_account_model.dart`, returning **null** when `Symbol` is absent so
+  the repository can tell "wrong tab" from "empty tab".
+- **Data**: `fetchHoldings` / `cachedHoldings` / `cachedHoldingsAt` across
+  `ISheetsRepository`, `SheetsRepositoryImpl` and `LoggingSheetsRepository`
+  (reads stay unlogged); `cache.holdings.{body,at}` in `SheetsLocalCache`
+  **including `evict()`**.
+- **Presentation** (`sheets_providers.dart`): `holdingsProvider` (through the
+  existing `_cachedThenLive`), `holdingsUpdatedAtProvider`,
+  `HoldingOrderNotifier` + `holdingOrderProvider`, `holdingsSectionsProvider`.
+- **Presentation** (`money.dart`): USD → `#,##0.00`; new `signedMoney` and
+  `signedPercent` (U+2212, sign outside the formatter).
+- **Presentation** (new `pages/holdings/holdings_page.dart`): the standard
+  `GradientBackground` → `FeatureScaffold` → `RefreshIndicator` → `.when()`
+  shell with the stale-error guard. `_SortCell` is a `GestureDetector`
+  (no `Material` ancestor, the `_CategoryBar` reason); the bars are plain
+  `Container`s — **no chart package**.
+- **Shell** (`main.dart`): four tabs, Holdings at index 1 with
+  `Icons.show_chart_rounded`; **Accounts 1→2, Transactions 2→3**.
+- **Docs** (`docs/data/sheets.md`): `Holdings` tab + page sections, the refresh
+  table row, and the USD-decimals note.
+- **Tests** (+62 → 229): new `sheet_holding_test.dart` (21),
+  `sheet_holding_model_test.dart` (10), `holdings_page_test.dart` (14); the
+  holdings group in `sheets_providers_test.dart` (7); cache round-trip + evict;
+  both `ISheetsRepository` fakes extended; `money_test.dart` reworked for the
+  2dp rule plus the two new formatters.
+
+### The 'Gravel' (this session)
+- **Not verified on-device.** APK built, not installed — see Next Immediate Step.
+- ⚠️ **The `money()` change is visible on three shipped pages.** Only amounts
+  explicitly labelled `USD` move (`plainNumber` and the bare-number arm are
+  untouched), but that still covers the **Transactions list**, the **summary
+  card**, the **category drill-down** and any **USD account balance**. A $45.30
+  coffee read `$45.3` before, so this is arguably a latent fix rather than a
+  regression — but it was not what the user asked for, and it is a one-line
+  revert plus `money_test.dart`. `accounts_page_test.dart:66` was the only
+  existing assertion that hard-coded the old form.
+- **The sort header's tap target is 10px type.** `HitTestBehavior.opaque` plus
+  6/8px padding makes the whole cell tappable, but the four cells sit close
+  together and `GAIN` / `GAIN %` are adjacent. Watch for mis-taps on-device.
+- **`accountIdentityColor` has only 6 hues**, so a section with 7+ positions
+  repeats colors in the stacked bar. The 2px gaps separate neighbours, and rows
+  are sorted so a repeat is rarely adjacent — but widening `_identityColors` is
+  the lever if it reads badly. That function is shared with the account
+  monograms, so widening it changes those too.
+- **The stacked bar is ordered by the current sort, not by size.** Sorting by
+  Symbol makes it an alphabetical bar, which is honest (it matches the rows) but
+  is not the "biggest slice first" shape you would expect from an allocation
+  chart. Worth a look before deciding it is a feature.
+- **Four nav labels at `fontSize: 11`.** "Transactions" is the long one; it did
+  not clip in the widget tests but those run at a fixed 800px test surface, not
+  on a narrow phone.
+- **`holdingsSectionsProvider` regroups and re-sorts on every order change** —
+  an O(n log n) pass over a list of positions, which is tiny. Not memoized, and
+  does not need to be.
+- **The page test disambiguates the section total by `fontSize == 28`**, because
+  a section holding one position has a total equal to that row's own value.
+  Same fragility as `_tileIconColor`'s `size == 20` trick: change the type scale
+  and the test fails unhelpfully.
+- Pre-existing and untouched: the stray `Color(0xFFF59E0B)` at
+  `add_transaction_sheet.dart:467`; the secondary/cyan literals in
+  `app_theme.dart:19-22`; dead `groupByMonth()` + `MonthGroup`; dead
+  `currency_formatter.dart`; the duplicate `_typeColor` and `_SectionLabel`
+  definitions; `_NetCaption` still renders a zero net flow as `+0`.
+
+## Next Immediate Step
+- **Install `build/app/outputs/flutter-apk/app-release.apk`** and open the new
+  **Holdings** tab against the **Real** sheet:
+  - ⭐ **Every row matches the sheet** — quantity, avg price, current price,
+    market value and unrealized gain equal columns C–H for that symbol, sign
+    and all.
+  - ⭐ **Each section total equals the sum of its rows**, and the header's
+    return % equals `gain ÷ cost` for that currency.
+  - **The derived percentage matches column I** for a few rows — the acceptance
+    criterion for decision 2.
+  - ⭐ **The sort header**: each column sorts biggest-first (Symbol A–Z);
+    tapping the **active** column reverses it and the marker flips; blank rows
+    stay at the bottom in both directions; both sections always agree; it
+    resets to `Value ▼` after a relaunch. **Check the taps land** (see Gravel).
+  - ₩ and $ are in separate sections and no figure is summed across them.
+  - Allocation shares sum to ~100% per section; the widest bar is the largest
+    position.
+  - A blank cell shows **—**, not `0` or `$0.00`.
+  - Airplane mode → relaunch: cached positions render with the old `Updated …`
+    time. (Briefly absent on the very first launch after this update.)
+  - ⚠️ **Regression from `money()`**: USD amounts now read `$45.30` rather than
+    `$45.3` on the **Transactions list**, the **summary card**, a **category
+    drill-down**, and any **USD account balance**. **Nothing ₩ may change.**
+    If the 2dp form looks wrong anywhere, say so — it is a one-line revert.
+  - **Regression, nav**: labels do not clip at four items, and all four tabs
+    keep their scroll position when switching away and back.
+  - Toggle Light / Dark: gain colors, the active sort-header color, and the bar
+    tracks in both.
+  - **Do not tap Add while verifying** — the whole change is read-only.
+- Point the **Test** profile at a sheet with no `Holdings` tab: the page must
+  show a real `ErrorCard` naming the missing tab, not an empty state.
+- Then commit. Note the tree also still carries the **unverified on-device
+  checks** from the milestone below.
+
+## Previous Milestone
 **Appearance setting: System / Light / Dark, persisted (2026-08-07).** Analyzer
 clean, **167/167 tests**. Sits directly on `06bd23b`, which had already committed
 everything below it.

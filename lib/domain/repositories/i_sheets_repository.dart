@@ -1,6 +1,7 @@
 import '../entities/dashboard_summary.dart';
 import '../entities/result.dart';
 import '../entities/sheet_account.dart';
+import '../entities/sheet_holding.dart';
 import '../entities/sheet_transaction.dart';
 
 /// The single data boundary of the app: read rows from the Google Sheet and
@@ -19,6 +20,9 @@ abstract class ISheetsRepository {
   /// only — the app never appends to or edits that tab.
   Future<Result<List<SheetAccount>>> fetchAccounts();
 
+  /// Fetches the `Holdings` tab — one row per stock position. Read only.
+  Future<Result<List<SheetHolding>>> fetchHoldings();
+
   /// The rows from the last successful [fetchTransactions], persisted
   /// on-device, or null when nothing usable is cached. Synchronous and
   /// best-effort so startup can render before the live fetch lands.
@@ -32,6 +36,10 @@ abstract class ISheetsRepository {
   /// on-device, or null when nothing usable is cached.
   List<SheetAccount>? cachedAccounts();
 
+  /// The positions from the last successful [fetchHoldings], persisted
+  /// on-device, or null when nothing usable is cached.
+  List<SheetHolding>? cachedHoldings();
+
   /// When the cached transactions were fetched from the sheet — i.e. how old
   /// the data currently shown is. Null when nothing is cached.
   DateTime? cachedTransactionsAt();
@@ -41,4 +49,7 @@ abstract class ISheetsRepository {
 
   /// When the cached accounts were fetched from the sheet.
   DateTime? cachedAccountsAt();
+
+  /// When the cached holdings were fetched from the sheet.
+  DateTime? cachedHoldingsAt();
 }

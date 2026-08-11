@@ -25,6 +25,8 @@ class SheetsLocalCache {
   String get _dashboardAtKey => 'cache.dashboard.at.$profileId.v1';
   String get _accountsKey => 'cache.accounts.body.$profileId.v1';
   String get _accountsAtKey => 'cache.accounts.at.$profileId.v1';
+  String get _holdingsKey => 'cache.holdings.body.$profileId.v1';
+  String get _holdingsAtKey => 'cache.holdings.at.$profileId.v1';
 
   String? readTransactions() => _prefs.getString(_transactionsKey);
 
@@ -59,6 +61,16 @@ class SheetsLocalCache {
   /// until the next successful fetch rather than as a wrong time.
   DateTime? accountsTimestamp() => _readAt(_accountsAtKey);
 
+  String? readHoldings() => _prefs.getString(_holdingsKey);
+
+  void writeHoldings(String body) {
+    _prefs.setString(_holdingsKey, body);
+    _prefs.setInt(_holdingsAtKey, DateTime.now().millisecondsSinceEpoch);
+  }
+
+  /// When [writeHoldings] last ran. Null when nothing is cached.
+  DateTime? holdingsTimestamp() => _readAt(_holdingsAtKey);
+
   /// Drops every cached body + timestamp for this profile. Call when the
   /// slot is re-pointed at a different sheet URL, so the previous sheet's
   /// rows/dashboard don't flash on the next load before the live refetch.
@@ -69,6 +81,8 @@ class SheetsLocalCache {
     _prefs.remove(_dashboardAtKey);
     _prefs.remove(_accountsKey);
     _prefs.remove(_accountsAtKey);
+    _prefs.remove(_holdingsKey);
+    _prefs.remove(_holdingsAtKey);
   }
 
   DateTime? _readAt(String key) {

@@ -6,11 +6,13 @@ import 'package:http/http.dart' as http;
 import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/result.dart';
 import '../../domain/entities/sheet_account.dart';
+import '../../domain/entities/sheet_holding.dart';
 import '../../domain/entities/sheet_transaction.dart';
 import '../../domain/repositories/i_sheets_repository.dart';
 import '../datasources/sheets_local_cache.dart';
 import '../models/dashboard_summary_model.dart';
 import '../models/sheet_account_model.dart';
+import '../models/sheet_holding_model.dart';
 import '../models/sheet_transaction_model.dart';
 
 /// Talks to the Google Apps Script web app backing the sheet.
@@ -295,6 +297,94 @@ class SheetsRepositoryImpl implements ISheetsRepository {
   }
 
   @override
+  Future<Result<List<SheetHolding>>> fetchHoldings() async {
+    if (webAppUrl.isEmpty) {
+      return const Failure(
+          'Google Sheet is not configured. Set the sheet URL in Settings.');
+    }
+
+    try {
+      final uri = Uri.parse(webAppUrl).replace(
+        queryParameters: {
+          'sheet': SheetHoldingModel.sheetName,
+          if (apiKey.isNotEmpty) 'apiKey': apiKey,
+        },
+      );
+      final resp = await _get(uri);
+
+      if (resp.statusCode != 200) {
+        return Failure('Sheet returned ${resp.statusCode}: ${resp.body}');
+      }
+      // Apps Script serves its own error pages as HTML with a 200 status.
+      if (resp.body.trimLeft().startsWith('<')) {
+        return const Failure(
+            'Sheet endpoint returned HTML, not JSON. The Apps Script web app '
+            'is likely deployed without a doGet function or an outdated '
+            'version. Redeploy docs/apps_script/Code.gs as a new version with '
+            'access set to "Anyone".');
+      }
+
+      final parsed = _parseHoldingsBody(resp.body);
+      if (parsed.isSuccess) {
+        cache?.writeHoldings(resp.body);
+      }
+      return parsed;
+    } catch (e) {
+      debugPrint('SheetsRepository.fetchHoldings: $e');
+      return Failure(e);
+    }
+  }
+
+  /// Unlike the `Accounts` tab — which degrades to an empty list because it
+  /// only supplies currency labels elsewhere — an unusable `Holdings` response
+  /// **is** an error: this tab is the whole Holdings page, and the likeliest
+  /// failure is a tab-name mismatch, which Apps Script reports as
+  /// `{"error": ...}` with HTTP 200. Rendering that as "no holdings" would be
+  /// actively misleading.
+  static Result<List<SheetHolding>> _parseHoldingsBody(String body) {
+    final decoded = jsonDecode(body);
+    if (decoded is! Map<String, dynamic>) {
+      return const Failure('Unexpected holdings response shape.');
+    }
+    final error = decoded['error'];
+    if (error != null) {
+      return Failure('Sheet error: $error');
+    }
+
+    final rawGrid = decoded['grid'];
+    if (rawGrid is! List) {
+      return const Failure(
+          'Holdings response has no "grid" — the deployed Apps Script is an '
+          'old version without ?sheet= support. Redeploy '
+          'docs/apps_script/Code.gs as a new version (Deploy → Manage '
+          'deployments → Edit → New version).');
+    }
+    final grid = rawGrid
+        .map<List<dynamic>>((row) => row is List ? row : const [])
+        .toList();
+
+    final holdings = SheetHoldingModel.fromGrid(grid);
+    if (holdings == null) {
+      return const Failure(
+          'The Holdings tab has no "${SheetHoldingModel.symbolHeader}" header '
+          'row, so its columns cannot be located.');
+    }
+    return Success(holdings);
+  }
+
+  @override
+  List<SheetHolding>? cachedHoldings() {
+    final body = cache?.readHoldings();
+    if (body == null) return null;
+    try {
+      return _parseHoldingsBody(body).valueOrNull;
+    } catch (e) {
+      debugPrint('SheetsRepository.cachedHoldings: $e');
+      return null;
+    }
+  }
+
+  @override
   DateTime? cachedTransactionsAt() => cache?.transactionsTimestamp();
 
   @override
@@ -302,6 +392,9 @@ class SheetsRepositoryImpl implements ISheetsRepository {
 
   @override
   DateTime? cachedAccountsAt() => cache?.accountsTimestamp();
+
+  @override
+  DateTime? cachedHoldingsAt() => cache?.holdingsTimestamp();
 
   @override
   Future<Result<void>> appendTransaction(SheetTransaction tx) async {

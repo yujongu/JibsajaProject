@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jibsaja/domain/entities/dashboard_summary.dart';
 import 'package:jibsaja/domain/entities/result.dart';
 import 'package:jibsaja/domain/entities/sheet_account.dart';
+import 'package:jibsaja/domain/entities/sheet_holding.dart';
 import 'package:jibsaja/domain/entities/sheet_transaction.dart';
 import 'package:jibsaja/domain/entities/transaction_category.dart';
 import 'package:jibsaja/domain/entities/transaction_type.dart';
@@ -33,12 +34,16 @@ class _FakeRepo implements ISheetsRepository {
     required this.fetchResults,
     this.accountsResult = const Failure('unused'),
     this.accountsAt,
+    this.holdingsResult = const Failure('unused'),
+    this.holdingsAt,
   });
 
   final List<SheetTransaction>? cached;
   final List<Result<List<SheetTransaction>>> fetchResults;
   final Result<List<SheetAccount>> accountsResult;
   final DateTime? accountsAt;
+  final Result<List<SheetHolding>> holdingsResult;
+  final DateTime? holdingsAt;
   int fetchCount = 0;
 
   @override
@@ -68,6 +73,12 @@ class _FakeRepo implements ISheetsRepository {
   List<SheetAccount>? cachedAccounts() => null;
   @override
   Future<Result<List<SheetAccount>>> fetchAccounts() async => accountsResult;
+  @override
+  List<SheetHolding>? cachedHoldings() => null;
+  @override
+  DateTime? cachedHoldingsAt() => holdingsAt;
+  @override
+  Future<Result<List<SheetHolding>>> fetchHoldings() async => holdingsResult;
   @override
   Future<Result<void>> appendTransaction(SheetTransaction tx) async =>
       const Success(null);
@@ -349,6 +360,133 @@ void main() {
       final container = await loaded();
 
       expect(container.read(accountsUpdatedAtProvider), isNull);
+    });
+  });
+
+  group('holdings', () {
+    const nvda = SheetHolding(
+      symbol: 'NVDA',
+      currency: 'USD',
+      baseValue: 2368,
+      marketValue: 3802,
+      unrealizedGain: 1434,
+    );
+    const tsla = SheetHolding(
+      symbol: 'TSLA',
+      currency: 'USD',
+      baseValue: 4797,
+      marketValue: 3915,
+      unrealizedGain: -882,
+    );
+    const samsung = SheetHolding(
+      symbol: '삼성전자',
+      currency: 'KRW',
+      baseValue: 8208000,
+      marketValue: 8916000,
+      unrealizedGain: 708000,
+    );
+
+    Future<ProviderContainer> loaded(
+      Result<List<SheetHolding>> result, {
+      DateTime? at,
+      Duration wait = const Duration(milliseconds: 50),
+    }) async {
+      final container = ProviderContainer(overrides: [
+        sheetsRepositoryProvider.overrideWithValue(_FakeRepo(
+          fetchResults: [const Success(<SheetTransaction>[])],
+          holdingsResult: result,
+          holdingsAt: at,
+        )),
+      ]);
+      addTearDown(container.dispose);
+      container.listen(holdingsProvider, (_, _) {}, fireImmediately: true);
+      await Future<void>.delayed(wait);
+      return container;
+    }
+
+    test('sections split by currency, largest first', () async {
+      final container = await loaded(const Success([nvda, samsung, tsla]));
+
+      final sections = container.read(holdingsSectionsProvider);
+      expect(sections.map((s) => s.currency), ['KRW', 'USD']);
+      expect(sections.last.marketValue, 3802 + 3915);
+    });
+
+    test('a failed fetch surfaces as an error, unlike accounts', () async {
+      // The Accounts tab degrades to an empty list because it only supplies
+      // currency labels elsewhere. This tab IS the page, so "the sheet is
+      // unreachable" must not render as "you own nothing".
+      //
+      // The wait must clear the cold-start retry — with no cache, the stream
+      // makes _coldStartAttempts tries 2s apart before the error surfaces.
+      final container = await loaded(
+        const Failure('Holdings tab not found'),
+        wait: const Duration(milliseconds: 2500),
+      );
+
+      expect(container.read(holdingsProvider).hasError, isTrue);
+      expect(container.read(holdingsSectionsProvider), isEmpty);
+    });
+
+    test('surfaces when the cached holdings were fetched', () async {
+      final at = DateTime(2026, 8, 11, 9, 30);
+      final container = await loaded(const Success(<SheetHolding>[]), at: at);
+
+      expect(container.read(holdingsUpdatedAtProvider), at);
+    });
+
+    test('is null before any successful fetch has ever landed', () async {
+      final container = await loaded(const Success(<SheetHolding>[]));
+
+      expect(container.read(holdingsUpdatedAtProvider), isNull);
+    });
+
+    test('opens on largest position first', () async {
+      final container = await loaded(const Success([nvda, tsla]));
+
+      expect(container.read(holdingOrderProvider),
+          (field: HoldingSort.value, dir: SortDir.desc));
+      expect(
+        container.read(holdingsSectionsProvider).single.holdings
+            .map((h) => h.symbol),
+        ['TSLA', 'NVDA'],
+      );
+    });
+
+    test('tapping the active column reverses it', () async {
+      final container = await loaded(const Success([nvda, tsla]));
+      final order = container.read(holdingOrderProvider.notifier);
+
+      order.tap(HoldingSort.value);
+
+      expect(container.read(holdingOrderProvider).dir, SortDir.asc);
+      expect(
+        container.read(holdingsSectionsProvider).single.holdings
+            .map((h) => h.symbol),
+        ['NVDA', 'TSLA'],
+      );
+
+      // And back again.
+      order.tap(HoldingSort.value);
+      expect(container.read(holdingOrderProvider).dir, SortDir.desc);
+    });
+
+    test('tapping a different column takes that column\'s natural direction',
+        () async {
+      final container = await loaded(const Success([nvda, tsla]));
+      final order = container.read(holdingOrderProvider.notifier);
+
+      // Reverse Value first, so the carried-over direction would be visible.
+      order.tap(HoldingSort.value);
+      order.tap(HoldingSort.gain);
+
+      expect(container.read(holdingOrderProvider),
+          (field: HoldingSort.gain, dir: SortDir.desc));
+
+      // A name column starts A→Z, not biggest-first.
+      order.tap(HoldingSort.symbol);
+      expect(container.read(holdingOrderProvider),
+          (field: HoldingSort.symbol, dir: SortDir.asc));
     });
   });
 

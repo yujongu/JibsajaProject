@@ -201,7 +201,9 @@ those headers still yields accounts (with a blank type and a null balance), so
 adding them could not regress the currency labels that predate them.
 
 **Currency display.** The Transactions list prefixes each row's amount with its
-account's currency — `₩12,500` (no decimals) or `$1,234.56`. An unrecognized
+account's currency — `₩12,500` (no decimals, the won has no minor unit) or
+`$1,234.56` (**always** two decimals, so a price never reads as truncated:
+`$118.40`, not `$118.4`). An unrecognized
 code is prefixed literally (`EUR 12.5`). When the account is **absent from this
 tab** or its `Currency` cell is **blank**, the amount renders as a bare,
 unlabelled number — the same as before this tab was read at all. An unmarked row
@@ -253,8 +255,77 @@ bare number — visiting another tab or relaunching was previously the only way.
 | Refresh on | Refetches |
 | :-- | :-- |
 | Dashboard | `DashboardDB1` only — it shares no data with the others |
+| Holdings | `Holdings` only — it shares no data with the others |
 | Accounts | `Accounts` only (which also re-labels the Transactions list) |
 | Transactions | Transactions **and** `Accounts` |
+
+## Holdings tab — `Holdings`
+
+Read via `?sheet=Holdings` and parsed by `SheetHoldingModel.fromGrid`. **Read
+only** — the app never appends to or edits this tab. It needs **no Apps Script
+change**: `doGet`'s `?sheet=` branch reads any tab as a grid, with nothing
+whitelisted.
+
+| Column | Read by the app? | Notes |
+| :-- | :-- | :-- |
+| `Symbol` | ✅ | The ticker. **Gates the parse** — see below |
+| `Quantity` | ✅ | Shares held |
+| `Avg Price` | ✅ | What you paid, per share |
+| `Current Price` | ✅ | Latest price the sheet knows |
+| `Base Value` | ✅ | Cost basis |
+| `Market Value` | ✅ | Current worth; also the default sort key and the allocation denominator |
+| `Unrealized Gain` | ✅ | Signed exactly as the sheet stores it |
+| `Percentage` | — | **Not read.** Derived instead — see below |
+| `Currency` | ✅ | ISO code (`KRW`, `USD`); read upper-cased. Splits the page into sections |
+
+The parser **anchors on the header text**, not on column letters. The live tab
+runs `Symbol` in column B through `Currency` in column J, but whatever sits in
+column A is irrelevant and inserting a column cannot shift the mapping.
+
+Every numeric cell is `double?`. A blank cell reads as **null, never 0** — 0 is
+a real value (a fully-sold position) and must stay distinguishable from "the
+sheet didn't say".
+
+> **`Percentage` is deliberately not read.** It holds
+> `(Market Value − Base Value) / Base Value`, which `SheetHolding.returnFraction`
+> derives — the same number, one fewer header that can break, and the derived
+> version returns **null** for a zero cost basis instead of importing the
+> spreadsheet's `#DIV/0!`.
+
+⚠️ **Unlike `Accounts`, a bad response here is an error, not an empty list.**
+The `Accounts` tab degrades silently because it only supplies currency labels to
+another page; `Holdings` *is* the Holdings page, so a missing tab must not read
+as "you own nothing". `fetchHoldings` returns a `Failure` when the body carries
+`{"error": ...}` (which Apps Script serves with **HTTP 200** for a tab-name
+mismatch), when `grid` is absent, or when the `Symbol` header cannot be found.
+
+## Holdings page
+
+One section per **currency**, largest by market value first; a blank-currency
+section always sorts last. Each section shows its own market value, cost basis
+and unrealized gain — **nothing is ever summed across currencies**, because the
+app takes no FX feed. A row is counted in those totals only when it has *both* a
+market value and a cost basis, so `market − cost == gain` always holds for the
+figures on screen; a row missing either is still listed, but contributes nothing
+and gets no allocation bar.
+
+Each position shows its market value, its gain in money and percent, its
+quantity and `avg → current` price, and a bar for its share of that currency's
+portfolio. The section header carries the same split as one stacked bar, with
+each segment in the symbol's `accountIdentityColor` so it maps onto the dot on
+the row below.
+
+**Sorting** is a column header — `Symbol · Value · Gain · Gain %` — repeated
+above each section but driven by one shared `holdingOrderProvider`, so the
+sections never disagree. Tapping a column sorts by it at its natural direction
+(names A→Z, numbers biggest-first); tapping the **active** column reverses it,
+which is what puts your worst performer one tap from your best. Rows with
+nothing to compare sort **last in both directions**. The order is not persisted
+— every launch opens on `Value ▼`.
+
+The page carries the shared `Updated …` caption, sourced from
+`holdingsUpdatedAtProvider` → `cachedHoldingsAt()` →
+`SheetsLocalCache.holdingsTimestamp()`.
 
 ## Account names
 The add-row form's account picker is **derived from the Transactions tab** —

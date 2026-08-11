@@ -7,6 +7,7 @@ import '../../data/repositories/sheets_repository_impl.dart';
 import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/result.dart';
 import '../../domain/entities/sheet_account.dart';
+import '../../domain/entities/sheet_holding.dart';
 import '../../domain/entities/sheet_transaction.dart';
 import '../../domain/entities/transaction_category.dart';
 import '../../domain/entities/transaction_summary.dart';
@@ -149,6 +150,22 @@ final accountsProvider = StreamProvider<List<SheetAccount>>((ref) {
   );
 });
 
+/// Rows of the sheet's `Holdings` tab — one stock position each.
+///
+/// Same cache-first behavior as [transactionsProvider]. Unlike
+/// [accountsProvider], a failure here **does** surface: this tab is the whole
+/// Holdings page, so an unreachable tab must read as an error rather than as
+/// an empty portfolio.
+final holdingsProvider = StreamProvider<List<SheetHolding>>((ref) {
+  final repo = ref.watch(sheetsRepositoryProvider);
+  return _cachedThenLive(
+    ref: ref,
+    cached: repo.cachedHoldings(),
+    fetch: repo.fetchHoldings,
+    label: 'holdingsProvider',
+  );
+});
+
 /// Account name (trimmed, lowercased) → currency code, for looking up the
 /// currency of a transaction row's Account. Accounts with a blank Currency
 /// cell are left out, so a miss and a blank cell behave identically: no symbol.
@@ -179,6 +196,39 @@ final dashboardUpdatedAtProvider = Provider<DateTime?>((ref) {
 final accountsUpdatedAtProvider = Provider<DateTime?>((ref) {
   ref.watch(accountsProvider);
   return ref.watch(sheetsRepositoryProvider).cachedAccountsAt();
+});
+
+/// When the positions currently on screen were fetched from the sheet.
+final holdingsUpdatedAtProvider = Provider<DateTime?>((ref) {
+  ref.watch(holdingsProvider);
+  return ref.watch(sheetsRepositoryProvider).cachedHoldingsAt();
+});
+
+/// How the Holdings list is ordered. Starts on largest-position-first every
+/// launch (not persisted — the same rule [SelectedMonthNotifier] follows).
+class HoldingOrderNotifier extends Notifier<HoldingOrder> {
+  @override
+  HoldingOrder build() => (field: HoldingSort.value, dir: SortDir.desc);
+
+  /// What tapping a column header does: a different column starts at its
+  /// natural direction, the column already active reverses.
+  void tap(HoldingSort field) => state = field == state.field
+      ? (
+          field: field,
+          dir: state.dir == SortDir.desc ? SortDir.asc : SortDir.desc,
+        )
+      : (field: field, dir: field.naturalDir);
+}
+
+final holdingOrderProvider =
+    NotifierProvider<HoldingOrderNotifier, HoldingOrder>(
+        HoldingOrderNotifier.new);
+
+/// The Holdings page's content: one section per currency, ordered by the
+/// current [holdingOrderProvider]. Empty while loading or on error.
+final holdingsSectionsProvider = Provider<List<CurrencyHoldings>>((ref) {
+  final holdings = ref.watch(holdingsProvider).valueOrNull ?? const [];
+  return holdings.groupByCurrency(ref.watch(holdingOrderProvider));
 });
 
 /// The calendar month the Transactions page is showing, normalized to the 1st

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'presentation/pages/accounts/accounts_page.dart';
 import 'presentation/pages/dashboard/dashboard_page.dart';
+import 'presentation/pages/holdings/holdings_page.dart';
 import 'presentation/pages/sheet/sheet_view_page.dart';
 import 'presentation/providers/sheets_providers.dart';
 import 'presentation/providers/theme_providers.dart';
@@ -45,7 +46,7 @@ class JibsajaApp extends ConsumerWidget {
   }
 }
 
-/// Three-tab shell: Dashboard, Accounts and Transactions. Uses an
+/// Four-tab shell: Dashboard, Holdings, Accounts and Transactions. Uses an
 /// [IndexedStack] so each tab keeps its scroll position and provider state when
 /// switching.
 class HomeShell extends StatefulWidget {
@@ -58,7 +59,12 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
-  static const _pages = [DashboardPage(), AccountsPage(), SheetViewPage()];
+  static const _pages = [
+    DashboardPage(),
+    HoldingsPage(),
+    AccountsPage(),
+    SheetViewPage(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -115,18 +121,25 @@ class _BottomNav extends StatelessWidget {
                 onTap: () => onTap(0),
               ),
               _NavItem(
-                icon: Icons.account_balance_rounded,
-                label: 'Accounts',
+                icon: Icons.show_chart_rounded,
+                label: 'Holdings',
                 selected: index == 1,
                 isDark: isDark,
                 onTap: () => onTap(1),
               ),
               _NavItem(
-                icon: Icons.receipt_long_rounded,
-                label: 'Transactions',
+                icon: Icons.account_balance_rounded,
+                label: 'Accounts',
                 selected: index == 2,
                 isDark: isDark,
                 onTap: () => onTap(2),
+              ),
+              _NavItem(
+                icon: Icons.receipt_long_rounded,
+                label: 'Transactions',
+                selected: index == 3,
+                isDark: isDark,
+                onTap: () => onTap(3),
               ),
             ],
           ),
