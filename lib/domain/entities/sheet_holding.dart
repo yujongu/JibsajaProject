@@ -6,6 +6,7 @@
 class SheetHolding {
   const SheetHolding({
     required this.symbol,
+    this.name,
     this.currency = '',
     this.quantity,
     this.avgPrice,
@@ -17,6 +18,10 @@ class SheetHolding {
 
   /// The ticker as written in the sheet ('NVDA', '삼성전자').
   final String symbol;
+
+  /// The company/stock name from the sheet's Name column (column A), or null
+  /// when that cell is blank.
+  final String? name;
 
   /// ISO code from the sheet's Currency cell ('KRW', 'USD'), or empty when the
   /// cell is blank — an unknown currency renders as a bare, unlabelled amount.

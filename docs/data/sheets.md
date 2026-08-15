@@ -268,6 +268,7 @@ whitelisted.
 
 | Column | Read by the app? | Notes |
 | :-- | :-- | :-- |
+| `Name` | ✅ | Company/stock name; column A. Shown as the row title, with `Symbol` as secondary text |
 | `Symbol` | ✅ | The ticker. **Gates the parse** — see below |
 | `Quantity` | ✅ | Shares held |
 | `Avg Price` | ✅ | What you paid, per share |
@@ -279,8 +280,8 @@ whitelisted.
 | `Currency` | ✅ | ISO code; read upper-cased. Splits the page into sections **and filters it** — see below |
 
 The parser **anchors on the header text**, not on column letters. The live tab
-runs `Symbol` in column B through `Currency` in column J, but whatever sits in
-column A is irrelevant and inserting a column cannot shift the mapping.
+runs `Name` in column A, `Symbol` in column B, through `Currency` in column J —
+anchoring by header text means inserting a column cannot shift the mapping.
 
 Every numeric cell is `double?`. A blank cell reads as **null, never 0** — 0 is
 a real value (a fully-sold position) and must stay distinguishable from "the

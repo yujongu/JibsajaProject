@@ -274,6 +274,28 @@ void main() {
     expect(find.text('No KRW or USD positions in the sheet'), findsOneWidget);
   });
 
+  testWidgets('shows the sheet Name as the title, with the ticker as secondary text',
+      (tester) async {
+    const named = SheetHolding(
+      symbol: 'NVDA',
+      name: 'NVIDIA',
+      currency: 'USD',
+      marketValue: 3802,
+      baseValue: 2368,
+    );
+    await _pumpPage(tester, const [named]);
+
+    expect(find.text('NVIDIA'), findsOneWidget);
+    expect(find.text('NVDA'), findsOneWidget);
+  });
+
+  testWidgets('falls back to the ticker as the title when Name is blank',
+      (tester) async {
+    await _pumpPage(tester, const [nvda]); // no `name` set
+
+    expect(find.text('NVDA'), findsOneWidget);
+  });
+
   testWidgets('carries the shared updated-at label, fed by its own provider',
       (tester) async {
     await _pumpPage(tester, const [nvda]);

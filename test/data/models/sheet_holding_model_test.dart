@@ -1,23 +1,24 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jibsaja/data/models/sheet_holding_model.dart';
 
-/// The live layout: column A is unused, `Symbol` starts at B and `Currency`
+/// The live layout: `Name` is column A, `Symbol` starts at B and `Currency`
 /// ends at J.
 List<List<dynamic>> _liveGrid() => [
-      ['', 'Symbol', 'Quantity', 'Avg Price', 'Current Price', 'Base Value',
+      ['Name', 'Symbol', 'Quantity', 'Avg Price', 'Current Price', 'Base Value',
         'Market Value', 'Unrealized Gain', 'Percentage', 'Currency'],
-      ['', 'NVDA', 20, 118.40, 190.10, 2368.0, 3802.0, 1434.0, 0.6056, 'USD'],
-      ['', '삼성전자', 120, 68400, 74300, 8208000, 8916000, 708000, 0.0863, 'KRW'],
+      ['NVIDIA', 'NVDA', 20, 118.40, 190.10, 2368.0, 3802.0, 1434.0, 0.6056, 'USD'],
+      ['삼성전자', '005930', 120, 68400, 74300, 8208000, 8916000, 708000, 0.0863, 'KRW'],
     ];
 
 void main() {
   group('SheetHoldingModel.fromGrid', () {
-    test('maps the live layout, ignoring column A', () {
+    test('maps the live layout, including the Name column', () {
       final holdings = SheetHoldingModel.fromGrid(_liveGrid())!;
 
       expect(holdings.length, 2);
       final nvda = holdings.first;
       expect(nvda.symbol, 'NVDA');
+      expect(nvda.name, 'NVIDIA');
       expect(nvda.quantity, 20);
       expect(nvda.avgPrice, 118.40);
       expect(nvda.currentPrice, 190.10);
@@ -25,8 +26,27 @@ void main() {
       expect(nvda.marketValue, 3802.0);
       expect(nvda.unrealizedGain, 1434.0);
       expect(nvda.currency, 'USD');
-      expect(holdings.last.symbol, '삼성전자');
+      expect(holdings.last.symbol, '005930');
+      expect(holdings.last.name, '삼성전자');
       expect(holdings.last.currency, 'KRW');
+    });
+
+    test('a blank Name cell yields null, not an empty string', () {
+      final grid = [
+        ['Name', 'Symbol', 'Market Value'],
+        ['', 'VOO', 3802.0],
+      ];
+
+      expect(SheetHoldingModel.fromGrid(grid)!.single.name, isNull);
+    });
+
+    test('missing Name header yields null name', () {
+      final grid = [
+        ['Symbol', 'Market Value'],
+        ['VOO', 3802.0],
+      ];
+
+      expect(SheetHoldingModel.fromGrid(grid)!.single.name, isNull);
     });
 
     test('the derived percentage matches the sheet\'s own Percentage cell', () {

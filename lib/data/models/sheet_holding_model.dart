@@ -5,9 +5,9 @@ import '../../domain/entities/sheet_holding.dart';
 ///
 /// Values are located by ANCHORING ON THE HEADER TEXT rather than fixed column
 /// letters: find the `Symbol` header cell, then find the others in that same
-/// header row. The tab is currently laid out with `Symbol` in column B through
-/// `Currency` in column J, but anchoring means whatever sits in column A is
-/// irrelevant and inserting a column cannot silently shift the mapping.
+/// header row. The tab is currently laid out with `Name` in column A, `Symbol`
+/// in column B, through `Currency` in column J — anchoring by header text
+/// means inserting a column cannot silently shift the mapping.
 ///
 /// The tab's `Percentage` column is deliberately **not** read. It holds
 /// `(Market Value − Base Value) / Base Value`, which [SheetHolding.returnFraction]
@@ -20,6 +20,7 @@ abstract final class SheetHoldingModel {
   /// The one header that gates the parse; without it there is nothing to map.
   static const String symbolHeader = 'Symbol';
 
+  static const String _nameHeader = 'Name';
   static const String _quantityHeader = 'Quantity';
   static const String _avgPriceHeader = 'Avg Price';
   static const String _currentPriceHeader = 'Current Price';
@@ -41,6 +42,7 @@ abstract final class SheetHoldingModel {
     final (headerRow, symbolCol) = symbolLoc;
 
     final header = grid[headerRow];
+    final nameCol = _findInRow(header, _nameHeader);
     final quantityCol = _findInRow(header, _quantityHeader);
     final avgPriceCol = _findInRow(header, _avgPriceHeader);
     final currentPriceCol = _findInRow(header, _currentPriceHeader);
@@ -55,8 +57,10 @@ abstract final class SheetHoldingModel {
     for (var r = headerRow + 1; r < grid.length; r++) {
       final symbol = _text(_at(grid, r, symbolCol));
       if (symbol.isEmpty) continue;
+      final name = nameCol == null ? '' : _text(_at(grid, r, nameCol));
       holdings.add(SheetHolding(
         symbol: symbol,
+        name: name.isEmpty ? null : name,
         currency: currencyCol == null
             ? ''
             : _text(_at(grid, r, currencyCol)).toUpperCase(),
