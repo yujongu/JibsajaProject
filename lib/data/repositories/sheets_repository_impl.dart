@@ -409,13 +409,20 @@ class SheetsRepositoryImpl implements ISheetsRepository {
         if (apiKey.isNotEmpty) 'apiKey': apiKey,
       };
 
-      final resp = await c
+      var resp = await c
           .post(
             Uri.parse(webAppUrl),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(body),
           )
           .timeout(_timeout);
+
+      if (resp.statusCode >= 300 && resp.statusCode < 400) {
+        final location = resp.headers['location'];
+        if (location != null) {
+          resp = await c.get(Uri.parse(location)).timeout(_timeout);
+        }
+      }
 
       if (resp.statusCode != 200) {
         return Failure('Sheet returned ${resp.statusCode}: ${resp.body}');

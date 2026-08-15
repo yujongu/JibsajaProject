@@ -126,6 +126,32 @@ void main() {
     });
   });
 
+  group('appendTransaction', () {
+    test('follows a 302 redirect (Apps Script exec behavior) to success',
+        () async {
+      final repo = SheetsRepositoryImpl(
+        webAppUrl: url,
+        client: MockClient((req) async {
+          if (req.method == 'POST') {
+            return http.Response('', 302, headers: {
+              'location': 'https://example.com/redirected',
+            });
+          }
+          expect(req.url.toString(), 'https://example.com/redirected');
+          return http.Response('{"ok": true}', 200);
+        }),
+      );
+
+      final result = await repo.appendTransaction(SheetTransaction(
+        date: DateTime(2026, 7, 1),
+        account: 'Toss',
+        type: TransactionType.purchase,
+        amount: 10,
+      ));
+      expect(result.isSuccess, isTrue);
+    });
+  });
+
   group('cachedDashboard', () {
     test('a successful fetch persists the grid for a fresh read', () async {
       final cache = await emptyCache();
