@@ -276,7 +276,7 @@ whitelisted.
 | `Market Value` | ✅ | Current worth; also the default sort key and the allocation denominator |
 | `Unrealized Gain` | ✅ | Signed exactly as the sheet stores it |
 | `Percentage` | — | **Not read.** Derived instead — see below |
-| `Currency` | ✅ | ISO code (`KRW`, `USD`); read upper-cased. Splits the page into sections |
+| `Currency` | ✅ | ISO code; read upper-cased. Splits the page into sections **and filters it** — see below |
 
 The parser **anchors on the header text**, not on column letters. The live tab
 runs `Symbol` in column B through `Currency` in column J, but whatever sits in
@@ -301,8 +301,20 @@ mismatch), when `grid` is absent, or when the `Symbol` header cannot be found.
 
 ## Holdings page
 
-One section per **currency**, largest by market value first; a blank-currency
-section always sorts last. Each section shows its own market value, cost basis
+Lists **only** the positions whose `Currency` is `KRW` or `USD`
+(`_kHoldingsCurrencies` in `sheets_providers.dart`, matched case- and
+whitespace-insensitively). Anything else is left out of the page entirely — of
+the list, of the section totals, and of the allocation bars.
+
+> ⚠️ **A blank or misspelled `Currency` cell makes that position vanish with no
+> trace.** There is no "other" section and no footer count, so the only symptom
+> is a row you expected that isn't there. Same failure mode as the Accounts
+> page's `Credit`/`Bank` filter. The empty-state notice names the filter
+> ("No KRW or USD positions in the sheet") rather than claiming the tab is
+> empty, so a sheet full of other currencies does not read as a broken fetch.
+
+One section per **currency**, largest by market value first. Each section shows
+its own market value, cost basis
 and unrealized gain — **nothing is ever summed across currencies**, because the
 app takes no FX feed. A row is counted in those totals only when it has *both* a
 market value and a cost basis, so `market − cost == gain` always holds for the

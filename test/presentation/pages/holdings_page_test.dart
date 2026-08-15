@@ -223,7 +223,55 @@ void main() {
   testWidgets('no positions at all shows the empty notice', (tester) async {
     await _pumpPage(tester, const []);
 
-    expect(find.text('No positions in the sheet'), findsOneWidget);
+    expect(find.text('No KRW or USD positions in the sheet'), findsOneWidget);
+  });
+
+  testWidgets('a position in another currency is not listed', (tester) async {
+    const chf = SheetHolding(
+      symbol: 'NESN',
+      currency: 'CHF',
+      baseValue: 1000,
+      marketValue: 9000000,
+      unrealizedGain: 8999000,
+    );
+    await _pumpPage(tester, const [nvda, chf]);
+
+    expect(find.text('NESN'), findsNothing);
+    expect(find.text('CHF · Market value'), findsNothing);
+    // The USD total is NVDA alone — the excluded row leaks into nothing.
+    expect(_headerTotals(tester), [r'$3,802.00']);
+  });
+
+  testWidgets('a position with a blank currency cell is not listed',
+      (tester) async {
+    const unlabelled = SheetHolding(
+      symbol: 'MYSTERY',
+      quantity: 5,
+      baseValue: 1000,
+      marketValue: 9000000,
+      unrealizedGain: 8999000,
+    );
+    await _pumpPage(tester, const [nvda, unlabelled]);
+
+    expect(find.text('MYSTERY'), findsNothing);
+    expect(find.text('Market value'), findsNothing); // the unlabelled header
+    expect(_headerTotals(tester), [r'$3,802.00']);
+  });
+
+  testWidgets('a sheet of only other currencies shows the empty notice',
+      (tester) async {
+    const chf = SheetHolding(
+      symbol: 'NESN',
+      currency: 'CHF',
+      baseValue: 1000,
+      marketValue: 1200,
+      unrealizedGain: 200,
+    );
+    await _pumpPage(tester, const [chf]);
+
+    // Not "the tab is empty" — the notice names the filter, because the sheet
+    // is in fact full of positions the page is choosing not to show.
+    expect(find.text('No KRW or USD positions in the sheet'), findsOneWidget);
   });
 
   testWidgets('carries the shared updated-at label, fed by its own provider',

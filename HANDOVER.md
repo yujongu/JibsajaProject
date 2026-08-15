@@ -1,9 +1,151 @@
 # HANDOVER
 
 ## Current Milestone
+**Holdings is filtered to KRW and USD only (2026-08-12).** Analyzer clean,
+**238/238 tests**, release APK rebuilt. **Committed and pushed to `main`
+(2026-08-15)**, directly on top of `4b3e23e`, the tab's first version.
+
+**Re-verified 2026-08-15 immediately before committing**: `flutter analyze`
+clean, `dart analyze lib test` clean, `flutter test` **238/238**. The APK at
+`build/app/outputs/flutter-apk/app-release.apk` was built three minutes after
+the last source edit, so **it carries this change**.
+
+⚠️ **Shipped without an on-device pass, deliberately.** The user is doing the
+device check on a different machine. Everything outstanding is consolidated
+under **"Deferred: the on-device backlog"** below — that is the one section to
+read when picking this up.
+
+The user asked to show only the rows whose `Currency` is `KRW` or `USD`.
+Everything else — other codes, and **blank cells** — is now filtered out before
+grouping, so it leaves the list, the section totals and the allocation bars.
+
+### Context & Decisions
+1. **⭐ The filter runs before `groupByCurrency`, not inside it.** Which
+   currencies to show is a product decision, so it lives in
+   `holdingsSectionsProvider` (`_kHoldingsCurrencies`); the domain's grouping
+   stays general and its blank-currency section is still supported and still
+   tested. Nothing about `CurrencyHoldings` changed.
+2. **⭐ A blank Currency cell matches nothing.** It could have been kept as the
+   unlabelled catch-all section the domain already supports, but "blank" is not
+   "KRW or USD". The cost is real and is the one thing to watch on-device: a
+   **misspelled or empty cell makes that position disappear with no trace** —
+   no "other" section, no footer count. Exactly the failure mode `ofType` has
+   on the Accounts page.
+3. **The empty-state notice names the filter** — "No KRW or USD positions in
+   the sheet", not "No positions". A sheet full of CHF rows would otherwise
+   read as a broken fetch. Copied from the Accounts page's wording.
+4. **`inCurrencies` takes a `Set<String>`** and normalizes with
+   `trim().toUpperCase()`, the same rule `groupByCurrency` and
+   `SheetAccountList.ofType` already use. It expects its argument upper-cased,
+   which its doc comment says.
+5. **Read-only, no contract change.** The sheet is still fetched whole; the
+   filtering is client-side.
+
+### What shipped
+- **Domain** (`sheet_holding.dart`): new `inCurrencies(Set<String>)` on the
+  existing `SheetHoldingList` extension.
+- **Presentation** (`sheets_providers.dart`): file-private
+  `_kHoldingsCurrencies = {'KRW', 'USD'}` and one extra call in
+  `holdingsSectionsProvider`.
+- **Presentation** (`holdings_page.dart`): the empty-state string.
+- **Docs** (`docs/data/sheets.md`): the `Currency` row now says it filters, plus
+  a warning callout on the Holdings page section.
+- **Tests** (+9 → 238): 4 domain cases for `inCurrencies` (codes kept,
+  case/whitespace, blank matches nothing, filter-everything); 2 provider cases
+  using deliberately **huge** excluded rows, so a leak shows up in the totals
+  and not just the section list; 3 page cases (other currency not listed, blank
+  currency not listed, all-other-currencies shows the notice).
+
+### The 'Gravel' (this session)
+- **Not verified on-device** — see Next Immediate Step. **This is the session
+  where that matters most**, because the change is defined by what it *hides*.
+- ⚠️ **`_kHoldingsCurrencies` is a hard-coded pair.** A third currency in the
+  sheet needs a code change. It is one line in `sheets_providers.dart`, but
+  there is no setting for it.
+- **`holdings_page.dart` still handles a null section currency** — the
+  `'Market value'` caption without a code, and `money()`'s unlabelled arm. That
+  path is now unreachable from the page, but the domain still supports it and
+  the widget stays defensive. Left alone deliberately rather than deleting a
+  branch the entity can still produce.
+- **The page test asserts `find.text('Market value')` findsNothing** to prove
+  the unlabelled section is gone. That string is a prefix of nothing else on
+  screen today, but `'KRW · Market value'` is a *different* string, so the
+  assertion is doing what it looks like — worth remembering if the caption is
+  ever reworded.
+- Pre-existing and untouched: everything under the milestone below.
+
+## Deferred: the on-device backlog
+
+**Nothing here blocks the code — every item below is a "look at it on a phone"
+check.** They have stacked up across **six** consecutive milestones, and the
+single APK on disk settles all six in one pass. Install
+`build/app/outputs/flutter-apk/app-release.apk` and work down the list.
+
+| Milestone | Commit | Verified on-device |
+|---|---|---|
+| Holdings filtered to KRW/USD | this one | ❌ |
+| Holdings tab | `4b3e23e` | ❌ |
+| Appearance: System/Light/Dark | `73cd155` | ❌ |
+| Category drill-down + Accounts freshness | `06bd23b` | ❌ |
+| Expense rows colored by category | `29cf9b1` | ❌ |
+| Accounts tab | `e653ed2` | ❌ |
+
+Each milestone's own **Next Immediate Step** section below is its full
+checklist and none of them has been struck through. The three checks that
+matter most, pulled to the top:
+
+1. ⭐ **Count the Holdings rows against the sheet.** Every `Holdings` row whose
+   `Currency` is `KRW` or `USD` appears, and nothing else does. **A row you
+   expected but cannot find means its `Currency` cell is blank or spelled
+   differently** — that is decision 2's cost, and the fix is the sheet, not the
+   app. Section totals should have dropped by exactly the excluded rows, and
+   allocation shares still sum to ~100% per section against the filtered total.
+2. ⚠️ **The `money()` USD 2-decimal change reaches outside the new tab.** USD
+   amounts now read `$45.30` rather than `$45.3` on the **Transactions list**,
+   the **summary card**, a **category drill-down**, and any **USD account
+   balance**. **Nothing ₩ may change.** One-line revert plus `money_test.dart`
+   if it looks wrong anywhere.
+3. ⭐ **Holdings figures against the sheet**: rows against columns C–H, the
+   derived percentage against column I, the sort header's four columns and its
+   reverse-on-re-tap, blank cells showing **—**.
+
+**Do not tap Add while verifying** — every one of the six milestones is
+read-only.
+
+### Code-level loose ends (no device needed)
+Carried forward so they are findable in one place rather than buried in six
+Gravel sections. None is a bug today; each is a lever if something reads wrong.
+
+- ⚠️ **`_kHoldingsCurrencies` is a hard-coded pair** in `sheets_providers.dart`.
+  A third currency in the sheet needs a code change — there is no setting.
+- **A blank or misspelled `Currency` cell silently removes a position** from
+  Holdings: no "other" section, no footer count. Same failure mode as the
+  Accounts page's `Credit`/`Bank` filter.
+- **`holdings_page.dart` still handles a null section currency** (the
+  `'Market value'` caption, `money()`'s unlabelled arm). Unreachable from the
+  page since the filter landed, but the domain still produces it and the widget
+  stays defensive. Left deliberately.
+- **The page test asserts `find.text('Market value')` findsNothing** to prove
+  the unlabelled section is gone. `'KRW · Market value'` is a *different*
+  string, so the assertion works — but rewording that caption breaks it.
+- **Pre-existing dead code, untouched for several sessions**: `groupByMonth()`
+  + `MonthGroup` in `transaction_summary.dart`; `currency_formatter.dart`; the
+  duplicate `_typeColor` and `_SectionLabel` definitions; the stray
+  `Color(0xFFF59E0B)` at `add_transaction_sheet.dart:467` duplicating
+  `AppColors.warning`; the secondary/cyan literals at `app_theme.dart:19-22`;
+  `_NetCaption` rendering a zero net flow as `+0`.
+
+## Next Immediate Step
+- **Run the on-device backlog above** on the other device, starting with check 1.
+- If everything reads right, strike the table through and the tree is fully
+  settled for the first time in six milestones.
+- If a Holdings row is missing, check its `Currency` cell **in the sheet**
+  before touching the app.
+
+## Previous Milestone
 **New Holdings tab — per-position stocks from the `Holdings` sheet
 (2026-08-11).** Analyzer clean, **229/229 tests** (was 167), release APK built.
-**Committed and pushed to `main`** — only the on-device pass is outstanding.
+**Committed and pushed to `main` as `4b3e23e`.**
 
 The app had three tabs and none answered *"which stock am I making money on?"*.
 The Dashboard rolls stocks up into two totals (`보유 미국 주식` / `보유 한국 주식`);

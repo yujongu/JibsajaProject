@@ -559,7 +559,9 @@ class _EmptyState extends StatelessWidget {
         Icon(Icons.show_chart_rounded, size: 44, color: color),
         const SizedBox(height: 12),
         Text(
-          'No positions in the sheet',
+          // Names the filter rather than claiming the tab is empty — a sheet
+          // full of positions in other currencies lands here too.
+          'No KRW or USD positions in the sheet',
           textAlign: TextAlign.center,
           style:
               TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: color),

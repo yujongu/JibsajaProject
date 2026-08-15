@@ -115,6 +115,17 @@ class CurrencyHoldings {
 }
 
 extension SheetHoldingList on List<SheetHolding> {
+  /// The positions whose Currency cell is one of [codes], compared case- and
+  /// whitespace-insensitively so `' usd '` in the sheet still matches. [codes]
+  /// must already be upper-case.
+  ///
+  /// A **blank** Currency cell matches nothing, so an unlabelled position is
+  /// filtered out rather than kept as a catch-all.
+  List<SheetHolding> inCurrencies(Set<String> codes) => [
+        for (final h in this)
+          if (codes.contains(h.currency.trim().toUpperCase())) h,
+      ];
+
   /// Positions grouped into one section per currency, each ordered by [order].
   ///
   /// Sections lead with the largest by market value; a blank-currency section

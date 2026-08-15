@@ -76,6 +76,46 @@ void main() {
     });
   });
 
+  group('inCurrencies', () {
+    test('keeps only the codes asked for', () {
+      final kept = [
+        _pos('NVDA', 100, 200),
+        _pos('삼성전자', 100, 200, currency: 'KRW'),
+        _pos('NESN', 100, 200, currency: 'CHF'),
+      ].inCurrencies({'KRW', 'USD'});
+
+      expect(kept.map((h) => h.symbol), ['NVDA', '삼성전자']);
+    });
+
+    test('matches case- and whitespace-insensitively', () {
+      final kept = [
+        _pos('NVDA', 100, 200, currency: ' usd '),
+        _pos('삼성전자', 100, 200, currency: 'krw'),
+      ].inCurrencies({'KRW', 'USD'});
+
+      expect(kept.length, 2);
+    });
+
+    test('⭐ a blank currency cell matches nothing', () {
+      // The position disappears from the page entirely rather than being kept
+      // as an unlabelled catch-all — a deliberate trade-off, since a misspelled
+      // or empty cell then leaves no trace.
+      final kept = [
+        _pos('MYSTERY', 100, 999999, currency: ''),
+        _pos('NVDA', 100, 200),
+      ].inCurrencies({'KRW', 'USD'});
+
+      expect(kept.map((h) => h.symbol), ['NVDA']);
+    });
+
+    test('filtering everything out yields an empty list, not an error', () {
+      expect(
+        [_pos('NESN', 100, 200, currency: 'CHF')].inCurrencies({'KRW', 'USD'}),
+        isEmpty,
+      );
+    });
+  });
+
   group('groupByCurrency', () {
     test('splits by currency and totals each section independently', () {
       final sections = [

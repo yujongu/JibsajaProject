@@ -412,6 +412,47 @@ void main() {
       expect(sections.last.marketValue, 3802 + 3915);
     });
 
+    test('⭐ only KRW and USD positions reach the page', () async {
+      const chf = SheetHolding(
+        symbol: 'NESN',
+        currency: 'CHF',
+        baseValue: 1000,
+        marketValue: 9000000,
+        unrealizedGain: 8999000,
+      );
+      const unlabelled = SheetHolding(
+        symbol: 'MYSTERY',
+        baseValue: 1000,
+        marketValue: 9000000,
+        unrealizedGain: 8999000,
+      );
+      final container =
+          await loaded(const Success([nvda, chf, unlabelled, samsung]));
+
+      final sections = container.read(holdingsSectionsProvider);
+      expect(sections.map((s) => s.currency), ['KRW', 'USD']);
+      // Both excluded rows are far larger than anything kept, so a leak would
+      // show up in the totals as well as in the section list.
+      expect(sections.last.marketValue, 3802);
+      expect(
+        sections.expand((s) => s.holdings).map((h) => h.symbol),
+        ['삼성전자', 'NVDA'],
+      );
+    });
+
+    test('a sheet of only other currencies reads as empty', () async {
+      const chf = SheetHolding(
+        symbol: 'NESN',
+        currency: 'CHF',
+        baseValue: 1000,
+        marketValue: 1200,
+        unrealizedGain: 200,
+      );
+      final container = await loaded(const Success([chf]));
+
+      expect(container.read(holdingsSectionsProvider), isEmpty);
+    });
+
     test('a failed fetch surfaces as an error, unlike accounts', () async {
       // The Accounts tab degrades to an empty list because it only supplies
       // currency labels elsewhere. This tab IS the page, so "the sheet is

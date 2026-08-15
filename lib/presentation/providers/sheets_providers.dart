@@ -224,11 +224,19 @@ final holdingOrderProvider =
     NotifierProvider<HoldingOrderNotifier, HoldingOrder>(
         HoldingOrderNotifier.new);
 
+/// The currencies the Holdings page lists. A position in any other currency —
+/// or with a **blank** Currency cell — is left out of the page entirely, which
+/// means a misspelled cell makes that position disappear with no trace. Same
+/// trade-off the Accounts page's `Credit`/`Bank` filter carries.
+const _kHoldingsCurrencies = {'KRW', 'USD'};
+
 /// The Holdings page's content: one section per currency, ordered by the
 /// current [holdingOrderProvider]. Empty while loading or on error.
 final holdingsSectionsProvider = Provider<List<CurrencyHoldings>>((ref) {
   final holdings = ref.watch(holdingsProvider).valueOrNull ?? const [];
-  return holdings.groupByCurrency(ref.watch(holdingOrderProvider));
+  return holdings
+      .inCurrencies(_kHoldingsCurrencies)
+      .groupByCurrency(ref.watch(holdingOrderProvider));
 });
 
 /// The calendar month the Transactions page is showing, normalized to the 1st
