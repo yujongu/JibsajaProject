@@ -12,6 +12,8 @@ to it (Purchase / Buy / Sell). No Firebase, no live price/FX feeds
 - **Sheet Schema & Backend Contract**: [docs/data/sheets.md](docs/data/sheets.md)
 - **Active Task State**: [HANDOVER.md](HANDOVER.md)
 - **Rules**: Scoped rules in `.claude/rules/`
+- **Gotchas & dead code**: [docs/gotchas.md](docs/gotchas.md)
+- **Past decisions**: [docs/handover-archive.md](docs/handover-archive.md) (closed)
 
 ## 🛠️ Critical Dev Commands
 - **First-time setup**: `cp lib/core/config/app_config.template.dart lib/core/config/app_config.dart`,

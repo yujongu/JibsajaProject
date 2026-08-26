@@ -1,0 +1,1980 @@
+# Handover Archive — Jibsaja
+
+Frozen milestone-by-milestone handover log, through 2026-08-15.
+
+This file is **history, not state**. It is kept because the reasoning behind past decisions is
+usually the fastest way to understand why the code looks the way it does. Nothing here is
+guaranteed to still be true.
+
+For what is true now, see:
+
+- [`HANDOVER.md`](../HANDOVER.md) — live state, next step
+- [`docs/gotchas.md`](gotchas.md) — traps that still bite
+- [`docs/data/sheets.md`](data/sheets.md) — sheet schema and backend contract
+
+New sessions do **not** append here. This log is closed.
+
+---
+
+# HANDOVER
+
+## Current Milestone
+**Holdings is filtered to KRW and USD only (2026-08-12).** Analyzer clean,
+**238/238 tests**, release APK rebuilt. **Committed and pushed to `main`
+(2026-08-15)**, directly on top of `4b3e23e`, the tab's first version.
+
+**Re-verified 2026-08-15 immediately before committing**: `flutter analyze`
+clean, `dart analyze lib test` clean, `flutter test` **238/238**. The APK at
+`build/app/outputs/flutter-apk/app-release.apk` was built three minutes after
+the last source edit, so **it carries this change**.
+
+⚠️ **Shipped without an on-device pass, deliberately.** The user is doing the
+device check on a different machine. Everything outstanding is consolidated
+under **"Deferred: the on-device backlog"** below — that is the one section to
+read when picking this up.
+
+The user asked to show only the rows whose `Currency` is `KRW` or `USD`.
+Everything else — other codes, and **blank cells** — is now filtered out before
+grouping, so it leaves the list, the section totals and the allocation bars.
+
+### Context & Decisions
+1. **⭐ The filter runs before `groupByCurrency`, not inside it.** Which
+   currencies to show is a product decision, so it lives in
+   `holdingsSectionsProvider` (`_kHoldingsCurrencies`); the domain's grouping
+   stays general and its blank-currency section is still supported and still
+   tested. Nothing about `CurrencyHoldings` changed.
+2. **⭐ A blank Currency cell matches nothing.** It could have been kept as the
+   unlabelled catch-all section the domain already supports, but "blank" is not
+   "KRW or USD". The cost is real and is the one thing to watch on-device: a
+   **misspelled or empty cell makes that position disappear with no trace** —
+   no "other" section, no footer count. Exactly the failure mode `ofType` has
+   on the Accounts page.
+3. **The empty-state notice names the filter** — "No KRW or USD positions in
+   the sheet", not "No positions". A sheet full of CHF rows would otherwise
+   read as a broken fetch. Copied from the Accounts page's wording.
+4. **`inCurrencies` takes a `Set<String>`** and normalizes with
+   `trim().toUpperCase()`, the same rule `groupByCurrency` and
+   `SheetAccountList.ofType` already use. It expects its argument upper-cased,
+   which its doc comment says.
+5. **Read-only, no contract change.** The sheet is still fetched whole; the
+   filtering is client-side.
+
+### What shipped
+- **Domain** (`sheet_holding.dart`): new `inCurrencies(Set<String>)` on the
+  existing `SheetHoldingList` extension.
+- **Presentation** (`sheets_providers.dart`): file-private
+  `_kHoldingsCurrencies = {'KRW', 'USD'}` and one extra call in
+  `holdingsSectionsProvider`.
+- **Presentation** (`holdings_page.dart`): the empty-state string.
+- **Docs** (`docs/data/sheets.md`): the `Currency` row now says it filters, plus
+  a warning callout on the Holdings page section.
+- **Tests** (+9 → 238): 4 domain cases for `inCurrencies` (codes kept,
+  case/whitespace, blank matches nothing, filter-everything); 2 provider cases
+  using deliberately **huge** excluded rows, so a leak shows up in the totals
+  and not just the section list; 3 page cases (other currency not listed, blank
+  currency not listed, all-other-currencies shows the notice).
+
+### The 'Gravel' (this session)
+- **Not verified on-device** — see Next Immediate Step. **This is the session
+  where that matters most**, because the change is defined by what it *hides*.
+- ⚠️ **`_kHoldingsCurrencies` is a hard-coded pair.** A third currency in the
+  sheet needs a code change. It is one line in `sheets_providers.dart`, but
+  there is no setting for it.
+- **`holdings_page.dart` still handles a null section currency** — the
+  `'Market value'` caption without a code, and `money()`'s unlabelled arm. That
+  path is now unreachable from the page, but the domain still supports it and
+  the widget stays defensive. Left alone deliberately rather than deleting a
+  branch the entity can still produce.
+- **The page test asserts `find.text('Market value')` findsNothing** to prove
+  the unlabelled section is gone. That string is a prefix of nothing else on
+  screen today, but `'KRW · Market value'` is a *different* string, so the
+  assertion is doing what it looks like — worth remembering if the caption is
+  ever reworded.
+- Pre-existing and untouched: everything under the milestone below.
+
+## Deferred: the on-device backlog
+
+**Nothing here blocks the code — every item below is a "look at it on a phone"
+check.** They have stacked up across **six** consecutive milestones, and the
+single APK on disk settles all six in one pass. Install
+`build/app/outputs/flutter-apk/app-release.apk` and work down the list.
+
+| Milestone | Commit | Verified on-device |
+|---|---|---|
+| Holdings filtered to KRW/USD | this one | ❌ |
+| Holdings tab | `4b3e23e` | ❌ |
+| Appearance: System/Light/Dark | `73cd155` | ❌ |
+| Category drill-down + Accounts freshness | `06bd23b` | ❌ |
+| Expense rows colored by category | `29cf9b1` | ❌ |
+| Accounts tab | `e653ed2` | ❌ |
+
+Each milestone's own **Next Immediate Step** section below is its full
+checklist and none of them has been struck through. The three checks that
+matter most, pulled to the top:
+
+1. ⭐ **Count the Holdings rows against the sheet.** Every `Holdings` row whose
+   `Currency` is `KRW` or `USD` appears, and nothing else does. **A row you
+   expected but cannot find means its `Currency` cell is blank or spelled
+   differently** — that is decision 2's cost, and the fix is the sheet, not the
+   app. Section totals should have dropped by exactly the excluded rows, and
+   allocation shares still sum to ~100% per section against the filtered total.
+2. ⚠️ **The `money()` USD 2-decimal change reaches outside the new tab.** USD
+   amounts now read `$45.30` rather than `$45.3` on the **Transactions list**,
+   the **summary card**, a **category drill-down**, and any **USD account
+   balance**. **Nothing ₩ may change.** One-line revert plus `money_test.dart`
+   if it looks wrong anywhere.
+3. ⭐ **Holdings figures against the sheet**: rows against columns C–H, the
+   derived percentage against column I, the sort header's four columns and its
+   reverse-on-re-tap, blank cells showing **—**.
+
+**Do not tap Add while verifying** — every one of the six milestones is
+read-only.
+
+### Code-level loose ends (no device needed)
+Carried forward so they are findable in one place rather than buried in six
+Gravel sections. None is a bug today; each is a lever if something reads wrong.
+
+- ⚠️ **`_kHoldingsCurrencies` is a hard-coded pair** in `sheets_providers.dart`.
+  A third currency in the sheet needs a code change — there is no setting.
+- **A blank or misspelled `Currency` cell silently removes a position** from
+  Holdings: no "other" section, no footer count. Same failure mode as the
+  Accounts page's `Credit`/`Bank` filter.
+- **`holdings_page.dart` still handles a null section currency** (the
+  `'Market value'` caption, `money()`'s unlabelled arm). Unreachable from the
+  page since the filter landed, but the domain still produces it and the widget
+  stays defensive. Left deliberately.
+- **The page test asserts `find.text('Market value')` findsNothing** to prove
+  the unlabelled section is gone. `'KRW · Market value'` is a *different*
+  string, so the assertion works — but rewording that caption breaks it.
+- **Pre-existing dead code, untouched for several sessions**: `groupByMonth()`
+  + `MonthGroup` in `transaction_summary.dart`; `currency_formatter.dart`; the
+  duplicate `_typeColor` and `_SectionLabel` definitions; the stray
+  `Color(0xFFF59E0B)` at `add_transaction_sheet.dart:467` duplicating
+  `AppColors.warning`; the secondary/cyan literals at `app_theme.dart:19-22`;
+  `_NetCaption` rendering a zero net flow as `+0`.
+
+## Next Immediate Step
+- **Run the on-device backlog above** on the other device, starting with check 1.
+- If everything reads right, strike the table through and the tree is fully
+  settled for the first time in six milestones.
+- If a Holdings row is missing, check its `Currency` cell **in the sheet**
+  before touching the app.
+
+## Previous Milestone
+**New Holdings tab — per-position stocks from the `Holdings` sheet
+(2026-08-11).** Analyzer clean, **229/229 tests** (was 167), release APK built.
+**Committed and pushed to `main` as `4b3e23e`.**
+
+The app had three tabs and none answered *"which stock am I making money on?"*.
+The Dashboard rolls stocks up into two totals (`보유 미국 주식` / `보유 한국 주식`);
+Transactions shows Buy/Sell rows but never a current position. The sheet's
+`Holdings` tab held the whole per-position picture and had never been read.
+
+There is now a fourth tab, **Holdings** at index 1, listing every position
+ranked by size, with its gain and its share of the portfolio.
+
+### Context & Decisions
+1. **⭐ Zero backend work.** `Code.gs:59` already routes `?sheet=<any tab>`
+   through `readGrid()` with nothing whitelisted, so `?sheet=Holdings` works
+   against the **already-deployed** script. No `Code.gs` edit, no redeploy. The
+   whole feature is client-side and **read-only** — the POST path is untouched.
+2. **⭐ The `Percentage` column (I) is never read.** The user confirmed it is
+   exactly `(G − F) / F`, so `SheetHolding.returnFraction` derives it. Same
+   number, one fewer header that can break, and the derived version returns
+   **null** for a zero cost basis rather than importing a `#DIV/0!`.
+3. **One section per currency, no FX** — the same rule `summarize()` follows.
+   Nothing is ever summed across ₩ and $.
+4. **⭐ The sort control is a table header, chosen from five mocked options.**
+   The first proposal was the `_ThemeModeCard` segmented card lifted from
+   Settings; the user rejected it, correctly — it is a card sitting above cards,
+   containing nothing. `Symbol · Value · Gain · Gain %` has no container at all,
+   is the smallest (~28px), and is the **only** option that carries a
+   *direction*, which is what makes "my worst performer" one tap from the best
+   instead of a scroll to the bottom.
+   - The header **repeats above each section** but reads one shared
+     `holdingOrderProvider`. That is right for a column header (it labels the
+     table under it) and would have been wrong for a floating chip control —
+     which is why the same repetition was listed as a *cost* of the docked
+     option and is not one here.
+   - `Symbol` was labelled `Position` in the mockup. Renamed: in investing
+     "position" means a holding, so "sort by position" reads as *position size*,
+     which is what `Value` already does. Its marker is `A–Z` / `Z–A`, not an
+     arrow — an arrow means nothing on a name column.
+5. **⭐ `money()` now gives USD a fixed 2 decimals** (user's pick). This is the
+   one change that reaches **outside** the new tab — see Gravel.
+6. **Nulls sort last in BOTH directions.** Partition-then-sort, not sort-then-
+   reverse: reversing floats the blank rows to the top, which is the one
+   ordering that is never useful.
+7. **A row counts toward the section totals only if it has both a market value
+   and a cost basis**, so `market − cost == gain` always holds for the figures
+   on the header. A half-valued row is still listed, but gets no bar.
+8. **Dashboard error policy, not the Accounts one.** `_parseAccountsBody`
+   degrades to `const []` because that tab only feeds currency labels elsewhere.
+   Holdings *is* the page, and the likeliest first-run failure is a tab-name
+   mismatch, which Apps Script reports as `{"error": ...}` at **HTTP 200** —
+   rendering that as "no holdings" would be actively misleading.
+
+The two mockups the design was chosen from:
+- Page layout — https://claude.ai/code/artifact/9e96cc75-2485-427a-a283-6e13fea079e0
+- Sort control, five options — https://claude.ai/code/artifact/448092c4-9166-4ae1-b297-702824cd39f6
+
+### What shipped
+- **Domain** (new `sheet_holding.dart`): `SheetHolding` (every numeric field
+  `double?`, per the `SheetAccount.currentBalance` precedent), `isValued`,
+  `returnFraction`; `CurrencyHoldings` modelled on `CurrencySummary` with
+  `share()`; `HoldingSort` / `SortDir` / `HoldingOrder` record + `naturalDir`;
+  `groupByCurrency` and the private `_ordered`, which breaks ties by symbol
+  (`List.sort` is not stable) with the sign applied to the **value** comparison
+  only, so ties stay A–Z in both directions.
+- **Data** (new `sheet_holding_model.dart`): header-anchored `fromGrid` copied
+  from `sheet_account_model.dart`, returning **null** when `Symbol` is absent so
+  the repository can tell "wrong tab" from "empty tab".
+- **Data**: `fetchHoldings` / `cachedHoldings` / `cachedHoldingsAt` across
+  `ISheetsRepository`, `SheetsRepositoryImpl` and `LoggingSheetsRepository`
+  (reads stay unlogged); `cache.holdings.{body,at}` in `SheetsLocalCache`
+  **including `evict()`**.
+- **Presentation** (`sheets_providers.dart`): `holdingsProvider` (through the
+  existing `_cachedThenLive`), `holdingsUpdatedAtProvider`,
+  `HoldingOrderNotifier` + `holdingOrderProvider`, `holdingsSectionsProvider`.
+- **Presentation** (`money.dart`): USD → `#,##0.00`; new `signedMoney` and
+  `signedPercent` (U+2212, sign outside the formatter).
+- **Presentation** (new `pages/holdings/holdings_page.dart`): the standard
+  `GradientBackground` → `FeatureScaffold` → `RefreshIndicator` → `.when()`
+  shell with the stale-error guard. `_SortCell` is a `GestureDetector`
+  (no `Material` ancestor, the `_CategoryBar` reason); the bars are plain
+  `Container`s — **no chart package**.
+- **Shell** (`main.dart`): four tabs, Holdings at index 1 with
+  `Icons.show_chart_rounded`; **Accounts 1→2, Transactions 2→3**.
+- **Docs** (`docs/data/sheets.md`): `Holdings` tab + page sections, the refresh
+  table row, and the USD-decimals note.
+- **Tests** (+62 → 229): new `sheet_holding_test.dart` (21),
+  `sheet_holding_model_test.dart` (10), `holdings_page_test.dart` (14); the
+  holdings group in `sheets_providers_test.dart` (7); cache round-trip + evict;
+  both `ISheetsRepository` fakes extended; `money_test.dart` reworked for the
+  2dp rule plus the two new formatters.
+
+### The 'Gravel' (this session)
+- **Not verified on-device.** APK built, not installed — see Next Immediate Step.
+- ⚠️ **The `money()` change is visible on three shipped pages.** Only amounts
+  explicitly labelled `USD` move (`plainNumber` and the bare-number arm are
+  untouched), but that still covers the **Transactions list**, the **summary
+  card**, the **category drill-down** and any **USD account balance**. A $45.30
+  coffee read `$45.3` before, so this is arguably a latent fix rather than a
+  regression — but it was not what the user asked for, and it is a one-line
+  revert plus `money_test.dart`. `accounts_page_test.dart:66` was the only
+  existing assertion that hard-coded the old form.
+- **The sort header's tap target is 10px type.** `HitTestBehavior.opaque` plus
+  6/8px padding makes the whole cell tappable, but the four cells sit close
+  together and `GAIN` / `GAIN %` are adjacent. Watch for mis-taps on-device.
+- **`accountIdentityColor` has only 6 hues**, so a section with 7+ positions
+  repeats colors in the stacked bar. The 2px gaps separate neighbours, and rows
+  are sorted so a repeat is rarely adjacent — but widening `_identityColors` is
+  the lever if it reads badly. That function is shared with the account
+  monograms, so widening it changes those too.
+- **The stacked bar is ordered by the current sort, not by size.** Sorting by
+  Symbol makes it an alphabetical bar, which is honest (it matches the rows) but
+  is not the "biggest slice first" shape you would expect from an allocation
+  chart. Worth a look before deciding it is a feature.
+- **Four nav labels at `fontSize: 11`.** "Transactions" is the long one; it did
+  not clip in the widget tests but those run at a fixed 800px test surface, not
+  on a narrow phone.
+- **`holdingsSectionsProvider` regroups and re-sorts on every order change** —
+  an O(n log n) pass over a list of positions, which is tiny. Not memoized, and
+  does not need to be.
+- **The page test disambiguates the section total by `fontSize == 28`**, because
+  a section holding one position has a total equal to that row's own value.
+  Same fragility as `_tileIconColor`'s `size == 20` trick: change the type scale
+  and the test fails unhelpfully.
+- Pre-existing and untouched: the stray `Color(0xFFF59E0B)` at
+  `add_transaction_sheet.dart:467`; the secondary/cyan literals in
+  `app_theme.dart:19-22`; dead `groupByMonth()` + `MonthGroup`; dead
+  `currency_formatter.dart`; the duplicate `_typeColor` and `_SectionLabel`
+  definitions; `_NetCaption` still renders a zero net flow as `+0`.
+
+## Next Immediate Step
+- **Install `build/app/outputs/flutter-apk/app-release.apk`** and open the new
+  **Holdings** tab against the **Real** sheet:
+  - ⭐ **Every row matches the sheet** — quantity, avg price, current price,
+    market value and unrealized gain equal columns C–H for that symbol, sign
+    and all.
+  - ⭐ **Each section total equals the sum of its rows**, and the header's
+    return % equals `gain ÷ cost` for that currency.
+  - **The derived percentage matches column I** for a few rows — the acceptance
+    criterion for decision 2.
+  - ⭐ **The sort header**: each column sorts biggest-first (Symbol A–Z);
+    tapping the **active** column reverses it and the marker flips; blank rows
+    stay at the bottom in both directions; both sections always agree; it
+    resets to `Value ▼` after a relaunch. **Check the taps land** (see Gravel).
+  - ₩ and $ are in separate sections and no figure is summed across them.
+  - Allocation shares sum to ~100% per section; the widest bar is the largest
+    position.
+  - A blank cell shows **—**, not `0` or `$0.00`.
+  - Airplane mode → relaunch: cached positions render with the old `Updated …`
+    time. (Briefly absent on the very first launch after this update.)
+  - ⚠️ **Regression from `money()`**: USD amounts now read `$45.30` rather than
+    `$45.3` on the **Transactions list**, the **summary card**, a **category
+    drill-down**, and any **USD account balance**. **Nothing ₩ may change.**
+    If the 2dp form looks wrong anywhere, say so — it is a one-line revert.
+  - **Regression, nav**: labels do not clip at four items, and all four tabs
+    keep their scroll position when switching away and back.
+  - Toggle Light / Dark: gain colors, the active sort-header color, and the bar
+    tracks in both.
+  - **Do not tap Add while verifying** — the whole change is read-only.
+- Point the **Test** profile at a sheet with no `Holdings` tab: the page must
+  show a real `ErrorCard` naming the missing tab, not an empty state.
+- Then commit. Note the tree also still carries the **unverified on-device
+  checks** from the milestone below.
+
+## Previous Milestone
+**Appearance setting: System / Light / Dark, persisted (2026-08-07).** Analyzer
+clean, **167/167 tests**. Sits directly on `06bd23b`, which had already committed
+everything below it.
+
+The ask was "add a dark mode light mode option in the settings". The finding worth
+recording: **both themes already existed and were complete.** `AppTheme.light` /
+`AppTheme.dark` are both fully built out and all ~18 presentation files already
+branch on `Theme.of(context).brightness`. The only thing missing was *user
+control* — `main.dart:41` hardcoded `themeMode: ThemeMode.system`, so the OS was
+the sole way to change appearance. **No widget was repainted.**
+
+### Context & Decisions
+1. **⭐ Three options, not a two-way toggle** (user's pick). System is the default,
+   so an install that never touches the setting behaves exactly as before. A
+   Light/Dark-only toggle would have been a regression: it forces a choice on
+   first launch and permanently stops following the OS.
+2. **⭐ No theme flash on launch, for free.** `sharedPreferencesProvider` is
+   already overridden in `main()` *before* `runApp` (`main.dart:23-27`), so
+   `ThemeModeNotifier.build()` reads the pinned mode synchronously and the first
+   frame is already correct. This is the reason the store is sync (no `Future`,
+   no `AsyncValue`) — worth preserving if this ever moves off SharedPreferences.
+3. **Persist first, then set state** — copied verbatim from
+   `SheetProfilesNotifier.switchTo`. The store is the source of truth across
+   restarts.
+4. **`ThemeModeStore` lives in `lib/data/` and imports Flutter's `ThemeMode`.**
+   The layer rules only forbid Flutter in `lib/domain/`, and `ThemeMode` is a
+   plain enum — a domain entity + repository interface for one persisted enum
+   would have been ceremony. Import is narrowed with `show ThemeMode`.
+5. **A segmented card, not three stacked tiles** (user's pick from a mockup).
+   The codebase has **no `Switch`, `SegmentedButton`, `Radio` or `ChoiceChip`
+   anywhere** — the established idiom is a tappable card. Three full-width
+   check-circle tiles (the `_ProfileTile` shape) would have cost 3× the vertical
+   space above the sheet picker, which is the page's actual subject.
+6. **No SnackBar on tap.** Every other Settings action confirms with one, but
+   here the whole app repainting *is* the confirmation.
+7. **Read-only.** No sheet contract, no network, no POST path.
+
+### What shipped
+- **Data** (new `datasources/theme_mode_store.dart`): ~20 lines, modelled on
+  `sheet_profile_store.dart` — `const` ctor over `SharedPreferences`, versioned
+  key `theme.mode.v1`, sync `read()` via a switch on the stored string with
+  `ThemeMode.system` as the fallback for both absent *and* unrecognized values,
+  `write()` storing `mode.name`.
+- **Presentation** (new `providers/theme_providers.dart`): `themeModeStoreProvider`
+  + `ThemeModeNotifier extends Notifier<ThemeMode>` + `themeModeProvider`,
+  mirroring `sheet_profile_providers.dart` line for line including the
+  `if (mode == state) return;` no-op guard.
+- **Presentation** (`main.dart`): `JibsajaApp` is now a `ConsumerWidget`;
+  `themeMode: ref.watch(themeModeProvider)`. `theme:`/`darkTheme:` untouched.
+- **Presentation** (`settings_page.dart`): a new **Appearance** section placed
+  *above* Active sheet, reusing the file-private `_SectionLabel`. New private
+  `_ThemeModeCard` (a `GlassCard` with `EdgeInsets.all(6)` and no `onTap`) over
+  three `_ThemeSegment`s — `Expanded` + `Material`/`InkWell` reusing `GlassCard`'s
+  own splash/highlight alphas, selected state = `AppColors.primary` at 0.12 alpha
+  with a w700 primary label.
+- **Tests** (+8 → 167): `theme_mode_store_test.dart` (default, a loop
+  round-tripping all three `ThemeMode.values`, unknown value → system) and
+  `theme_providers_test.dart` (default, seeds from store, `set` updates state
+  **and** a fresh container over the same prefs reads it back).
+
+### The 'Gravel' (this session)
+- **Not verified on-device.** No APK built. A settings control is judged by how
+  it looks and feels — see Next Immediate Step.
+- **⭐ `ThemeMode.system` looks identical to whichever of Light/Dark the OS is
+  currently on.** The segment highlight is the *only* thing distinguishing
+  "following the OS, which is dark" from "pinned to Dark". There is no "System
+  (Dark)" hint under the label. Acceptable, but it is the one genuinely ambiguous
+  state on the page.
+- **The status bar is handled, the nav bar is not.** `appBarTheme.systemOverlayStyle`
+  flips with the theme so the status bar icons are right; the Android navigation
+  bar has never been styled by this app and is unchanged by the switch.
+- **No animated transition.** Switching repaints instantly. `MaterialApp` does
+  cross-fade `theme`↔`darkTheme` changes, but pinning between light and dark is
+  effectively a hard cut in practice — this has not been watched on a device.
+- **`_ThemeSegment` is a `ConsumerWidget` purely to reach `ref.read` in `onTap`.**
+  It could take a callback from its parent instead; three segments did not justify
+  the threading.
+- **The segments have no `Semantics` selected-state.** Screen-reader users hear
+  three unrelated buttons rather than a group with one selected. The whole app has
+  no explicit semantics anywhere, so this is consistent, not a new gap.
+- Pre-existing and untouched: the stray `Color(0xFFF59E0B)` at
+  `add_transaction_sheet.dart:467` duplicating `AppColors.warning`; the three
+  secondary/cyan literals in `app_theme.dart:19-22` that never made it into
+  `AppColors`; dead `groupByMonth()` + `MonthGroup`; dead `currency_formatter.dart`;
+  `_NetCaption` still renders a zero net flow as `+0`.
+
+## Next Immediate Step
+- **`flutter run`** (or build an APK) → Dashboard app bar → **Settings**:
+  - ⭐ The **Appearance** card sits above Active sheet with **System** selected on
+    a fresh install, and the app looks exactly as it did before.
+  - Tap **Light**: the whole app turns light immediately — **including the custom
+    bottom nav** (`_BottomNav` reads `Theme.of(context).brightness`, so it should
+    follow) and the status bar icons. Tap **Dark**, then **System**.
+  - **Kill and relaunch on a pinned mode**: it comes up in that mode with **no
+    flash** of the other theme on the first frame. That is the acceptance
+    criterion for decision 2.
+  - With the app pinned to **Light**, toggle the **OS** to dark: the app must
+    **not** move. Then switch the app to System and toggle the OS again: it must
+    follow.
+  - Check the pinned-Light look on the screens that were only ever seen in dark:
+    the **category trend chart** and **drill-down header** from the milestone
+    below, and the Accounts page.
+  - **Do not tap Add while verifying** — this change is read-only.
+- ~~Then commit.~~ **Done** — committed and pushed to `main` (`main.dart`,
+  `settings_page.dart`, the two new `lib/` files, the two new test files,
+  `HANDOVER.md`). Only the on-device verification above is outstanding.
+
+## Previous Milestone
+**Category drill-down: tap a bar to see the transactions behind it
+(2026-08-07).** Analyzer clean, **159/159 tests**. **Committed as `06bd23b`**,
+together with the Accounts-freshness work below — the two overlapped in
+`sheet_view_page.dart`, `sheets_providers.dart` and their two test files, so they
+shipped in one commit rather than being split.
+
+The summary card said **how much** went to 식비 in August but gave no way to
+reach the rows behind that number. `_CategoryBar` was inert — nothing on the card
+was tappable at all. Tapping a bar now pushes a page with that category's
+transactions for the month, a header total, and a 12-month trend.
+
+### Context & Decisions
+1. **⭐ The user's two questions were about cost, and both answers were
+   favourable.** *Will a full detail page slow the app down?* No — a
+   `MaterialPageRoute` builds on push, so the Transactions page carries nothing
+   extra until you open it, and `transactionsProvider` already holds the whole
+   sheet in memory (one GET, cached body), so there is no new I/O of any kind.
+   *Is a monthly trend affordable?* It is **cheaper than one month-arrow tap**:
+   a single O(n) pass with no list allocation, where every month change already
+   runs `inMonth()` twice (two full passes, two list allocations) plus
+   `monthBoundsProvider`'s full loop. The page's measured bottleneck has always
+   been widget building, never arithmetic (`942182b`).
+2. **⭐ `_countsForCategory` is the whole correctness story.** A drill-down total
+   that disagrees with the bar that opened it would be worse than no drill-down.
+   That one private predicate in `transaction_summary.dart` restates
+   `_Accumulator.add`'s rules — purchases only, a null category is `Misc.`, spend
+   is `-amount` — and **both** `inCategory` and `monthlySpend` route through it
+   so they cannot drift apart. The domain tests exist mostly to pin it.
+3. **A null `currency` means "match everything", not "match nothing".**
+   `summarize()` emits a null-currency section only when *no* row anywhere
+   resolved a currency, so that section covers every row. Getting this backwards
+   would empty the page for anyone whose `Accounts` tab is unreachable.
+4. **The trend is read-only** (user's pick over tapping a bar to switch months).
+   A chart that silently moved the month behind the page is a surprise; the
+   arrows on the Transactions page stay the one way to change period.
+5. **Fixed 12-month window** (user's pick over all-history). The bar count never
+   changes, so the chart looks the same whether the sheet holds 6 months or 6
+   years, and months with no spend render as visibly empty slots rather than
+   vanishing.
+6. **The list stays scoped to the selected month** (user's pick). Its total then
+   equals the bar exactly; the trend is what carries history.
+7. **No chart package.** The app runs on six dependencies and a 12-bar chart is
+   a `Row` of `Container`s using the same `FractionallySizedBox` technique
+   `_CategoryBar` already uses. `fl_chart` for one screen was not worth it.
+8. **The header is derived from providers, not passed in from the tapped bar.**
+   Passing `CategorySpending` would have been simpler but goes stale if the
+   sheet refreshes while the page is open.
+9. **Read-only.** No sheet contract, no network, no POST path.
+
+### What shipped
+- **Domain** (`transaction_summary.dart`): new `MonthlySpend` typedef
+  (`({DateTime month, double amount})`); `inCategory` and `monthlySpend` added to
+  the existing `TransactionAggregates` extension as siblings of `inMonth`; the
+  private `_countsForCategory` predicate they share. `monthlySpend` walks the
+  window with `DateTime(endMonth.year, endMonth.month - i)`, which crosses a year
+  boundary on its own — the same trick `SelectedMonthNotifier.shift` uses.
+- **Presentation** (`sheets_providers.dart`): `CategoryQuery` typedef
+  (`({TransactionCategory category, String? currency})` — records compare
+  structurally, so it works as a family key), plus
+  `categoryTransactionsProvider` and `categoryTrendProvider`, both
+  `Provider.autoDispose.family`. The trend reads **all** transactions; the list
+  reads `selectedMonthTransactionsProvider`.
+- **Presentation** (new `shared/widgets/transaction_tile.dart`):
+  `_TransactionTile` moved out of `sheet_view_page.dart` and made public as
+  `TransactionTile`, taking that file's `_typeColor` with it. Body unchanged.
+- **Presentation** (new `pages/category/category_detail_page.dart`): a
+  `ConsumerWidget` in the same `GradientBackground` → `FeatureScaffold` shell as
+  `SettingsPage`/`HistoryPage`. Three slivers — header, `_TrendChart`, and a
+  **`SliverList.builder`** of rows (a `Column` here would have repeated the
+  `942182b` bug). `CategorySpending.fraction` already is the share-of-spending
+  figure, so the "% of spending" line needed no new arithmetic.
+- **Presentation** (`sheet_view_page.dart`): `_CategoryBar` wrapped in a
+  `GestureDetector` that pushes the page itself — it already knew its category
+  and currency, so **no callback threading through `_CurrencySection` or
+  `_SummaryHeader`**, neither of which was touched. Gained 5px vertical padding
+  for the tap target and a chevron so the affordance is visible.
+- **Tests** (+19): 10 domain cases across `inCategory` (purchases only,
+  null → `Misc.`, currency match, the null-currency catch-all) and
+  `monthlySpend` (12 slots oldest-first, zero-fill, year-boundary walk, window
+  exclusion); 3 provider cases; 1 in `sheet_view_page_test.dart` for the tap;
+  new `category_detail_page_test.dart` (5) including the total-matches-the-bar
+  assertion.
+
+### The 'Gravel' (this session)
+- **Not verified on-device.** No APK built this session. The trend chart in
+  particular has never been looked at — see Next Immediate Step.
+- **⭐ The bar list's spacing was rebalanced, not just padded.** `_CategoryBar`
+  now carries `symmetric(vertical: 5)` and `_CurrencySection`'s per-bar
+  `SizedBox(height: 10)` was **removed**, so 5+5 between neighbours reproduces
+  the old 10px gap. The label gap above the first bar went 10 → 5. Net effect is
+  the card is ~5px shorter at the bottom of the category list. **The card's
+  height is what the `AnimatedSize` month transition sizes against**, so this is
+  worth a glance on-device.
+- **The tap target is ~35px, not the 44px guideline.** Twelve bars at 44px each
+  would have grown the card substantially. `HitTestBehavior.opaque` means the
+  whole row including the padding is tappable, but a mis-tap onto the neighbour
+  is possible.
+- **`TransactionTile` moved, but `add_transaction_sheet.dart` still has its own
+  duplicate `_typeColor`.** Deliberately untouched — pre-existing and unrelated,
+  as it has been for several sessions. The duplication is now between a shared
+  widget and a form, which is at least a clearer split than before.
+- **The trend's month labels are single letters** (`DateFormat('MMM')[0]`), so a
+  12-month window shows J-F-M-A-M-J-J-A-S-O-N-D with three ambiguous pairs. Fine
+  as a shape-reading device, useless for pinpointing a month — the selected one
+  is bolded and colored to compensate.
+- **An all-zero trend window renders 12 hairlines.** Reachable for a category
+  with spend in the selected month only if that month is somehow excluded, which
+  it cannot be — but the `peak == 0` guard exists so it degrades quietly rather
+  than dividing by zero.
+- **The empty-state notice is nearly unreachable**: a bar exists on the card
+  exactly when the category has spend, so the only route in is a refresh landing
+  while the page is open. It is 12 lines and beats a blank screen.
+- Pre-existing and untouched: dead `groupByMonth()` + `MonthGroup` in
+  `transaction_summary.dart` (still dead — the all-history option that would
+  have revived it was not the one chosen); dead `currency_formatter.dart`;
+  `_NetCaption` still renders a zero net flow as `+0`.
+
+## Next Immediate Step
+- **`flutter build apk`, install, open Transactions** against the **Real** sheet
+  and tap into a few categories:
+  - ⭐ **The page's header total equals the bar that opened it**, in every month
+    tried. That is the acceptance criterion — a mismatch means the filter drifted
+    from `summarize()`'s rules and `_countsForCategory` is where to look.
+  - The transaction count in the header matches the rows listed, and every row is
+    that category.
+  - The trend shows 12 bars ending at the month you came from, the selected month
+    stands out, and empty months read as empty rather than missing.
+  - **Back out and confirm the month arrows have not moved** — the chart is
+    read-only.
+  - A month with **both ₩ and USD** sections: tapping a bar in each opens a page
+    scoped to that currency alone.
+  - **Watch the month-switch animation** after the spacing change (see Gravel).
+  - Scroll a heavy category (100+ rows) — it should feel like the main list.
+  - **Do not tap Add while verifying** — the whole change is read-only.
+- Toggle the OS theme and check the trend bars and header in both.
+- Then commit. **The tree also holds the Accounts-freshness work below**, which
+  is a separate milestone — commit them separately, splitting the shared hunks in
+  `sheet_view_page.dart`, `sheets_providers.dart`,
+  `sheets_providers_test.dart` and `sheet_view_page_test.dart`.
+
+## Previous Milestone
+**Accounts page freshness: `Updated …` caption + cross-refresh (2026-08-07).**
+Analyzer clean, **140/140 tests**, release APK built. **Uncommitted.**
+
+Two freshness gaps. The first the user asked for directly; the second came out
+of their follow-up question — *"why doesn't refreshing one page refresh the
+others?"* — which turned out to have a real answer.
+
+### Context & Decisions
+1. **The missing caption was one missing method.** When the `Accounts` tab was
+   first read (`0af12d8`, purely for currency symbols), the freshness plumbing
+   was skipped on purpose — `writeAccounts` carried a comment saying nothing in
+   the UI reports how fresh the accounts are. The Accounts page made that false.
+   The fix walks the existing transactions/dashboard chain end to end (cache key
+   → repo → interface → decorator → provider → page); every step had a sibling
+   to copy and no new concept was added.
+2. **⭐ The refresh question exposed a real one-way staleness bug.** Each page
+   invalidates only its own provider, and each is its own GET — right for the
+   Dashboard, which shares nothing. But `accountsProvider` *also* feeds the
+   Transactions page's ₩/$ symbols and its per-currency summary split.
+   Refreshing Accounts updated Transactions; refreshing Transactions could not
+   pick up a newly added account. A row against it showed a bare unlabelled
+   number that **pull-to-refresh would never fix** — only a tab visit or a
+   relaunch would. `_refresh(ref)` in `sheet_view_page.dart` now invalidates
+   both.
+3. **Refresh-all was rejected** (user's pick of the three options). Any page
+   refreshing everything means three parallel GETs at Apps Script — the exact
+   burst shape `_get()`'s 429/5xx retry exists to survive. Two GETs from one
+   page is bounded: a failed accounts leg is swallowed by `_cachedThenLive`
+   while a cache exists, so the worst case is the currency map staying stale,
+   which is today's behavior. **The syncing bar is unaffected** — it watches
+   `isFetchingProvider('transactionsProvider')` only.
+4. **The append path was left alone.** `add_transaction_sheet.dart` still
+   invalidates only `transactionsProvider` after a successful append; appending
+   a row cannot change the `Accounts` tab.
+5. **Existing installs briefly show no caption.** Their cached accounts body has
+   no timestamp key, so it reads null until the next successful fetch and
+   `UpdatedAtLabel` renders nothing. Self-heals in seconds, and is strictly
+   better than dating a response with a time it never had.
+
+### What shipped
+- **Data** (`sheets_local_cache.dart`): `cache.accounts.at.{profileId}.v1`,
+  written by `writeAccounts`, read by `accountsTimestamp()`, **and removed in
+  `evict()`** — miss that last one and a re-pointed profile keeps a timestamp
+  dating a body that was dropped. The obsolete "no timestamp companion" comment
+  is gone.
+- **Domain/Data**: `cachedAccountsAt()` on `ISheetsRepository`,
+  `SheetsRepositoryImpl` and `LoggingSheetsRepository` (reads stay unlogged).
+- **Presentation**: `accountsUpdatedAtProvider`; `_AccountsBody` takes an
+  `updatedAt` and renders `UpdatedAtLabel` as its first list child; `_refresh`
+  replaces the three `ref.invalidate(transactionsProvider)` call sites on the
+  Transactions page (app-bar action, pull-to-refresh, error retry).
+- **Docs** (`docs/data/sheets.md`): the caption's plumbing, plus a new "Which
+  refresh refetches what" table. The "a bare number means the account is missing
+  from this tab" line now also names stale cache as a cause.
+- **Tests** (+4 → 140): cache timestamp round-trip + evict; `cachedAccountsAt`
+  added to the "reads pass through unlogged" assertion; both `ISheetsRepository`
+  fakes gained the member (`_FakeRepo`'s is scriptable via a new `accountsAt`);
+  two `accountsUpdatedAtProvider` cases; one page test that the label is wired
+  in.
+
+### The 'Gravel' (this session)
+- **Not verified on-device yet** — see Next Immediate Step. The cross-refresh
+  has **no unit test**: asserting that a tap invalidates two providers needs a
+  repository fake wired through the page, which these page tests deliberately
+  avoid constructing.
+- ⚠️ **`UpdatedAtLabel` cannot be pumped with a non-null time in a widget test.**
+  It watches a **non-autoDispose** one-minute `Stream.periodic`, so
+  `pumpAndSettle` never settles and the timer is still pending at teardown even
+  after unmounting the tree — disposing the `ProviderScope` did not cancel it,
+  and neither did making the ticker `autoDispose` (tried, reverted, since it
+  fixed nothing). The value the page feeds the label is covered at the
+  **provider** level instead. If a future test needs the rendered "3m ago", the
+  lever is injecting the ticker, not more pumping.
+- **`find.byType(UpdatedAtLabel)` needs `skipOffstage: false`.** With a null time
+  the label builds `SizedBox.shrink()`, and the default finder skips a zero-size
+  widget even though it is mounted. The comment in `accounts_page_test.dart`
+  says so.
+- **The Accounts empty state has no caption** — `_AccountsBody` early-returns
+  before the list. Matches the Transactions empty state, but it is the one place
+  you cannot tell whether "no credit or bank accounts" is fresh or cached.
+- **Two GETs now fire from one pull on Transactions.** Bounded (decision 3), but
+  it is the first place in the app where one user action makes two requests. If
+  Apps Script starts 429-ing on refresh, look here first.
+- Pre-existing and untouched: everything listed under the two milestones below.
+
+## Next Immediate Step
+- **Install `build/app/outputs/flutter-apk/app-release.apk`.** It also carries
+  the Accounts tab and the category colors below, **neither of which has been
+  verified on-device** — do all three checklists in one pass.
+- **The caption**: Accounts shows `Updated …` above the first section, styled
+  like the other two pages, and pull-to-refresh moves it to `just now`. It is
+  **briefly absent on the very first launch** after this update (decision 5) —
+  expected, not a bug. Airplane mode → relaunch: cached balances render *and*
+  the caption shows the old time rather than vanishing.
+- **⭐ The cross-refresh, end to end** — the case that prompted it:
+  1. Add a new account (name + `Currency`) to the sheet's `Accounts` tab.
+  2. Add a transaction against it in the Transactions tab.
+  3. Pull to refresh **on the Transactions page only**. The new row must appear
+     **with its ₩/$ symbol** — before this change it stayed a bare number until
+     you visited another tab.
+  - Refreshing Transactions should still feel like one action: no double
+    spinner, and the syncing bar still clears when the rows land.
+- **Do not tap Add while verifying the Accounts tab** — that part is read-only.
+
+## Previous Milestone
+**Expense rows are colored by category, not by type (2026-08-06).** Analyzer
+clean, **136/136 tests**. **Committed on `main`**, directly on top of the
+Accounts tab below (`e653ed2`), which shipped in the same session.
+
+The user's report: "the icons are good, but it is hard to get a grasp when all
+expenses are red." Correct — `_TransactionTile` took its color from
+`_typeColor(tx.type)`, and every `TransactionType.purchase` maps to
+`AppColors.negative`. The category only ever reached the icon. A month of
+spending was one undifferentiated red block, so the 20px icon was the sole
+signal separating 식비 from 웨딩.
+
+A category palette **already existed** (`TransactionCategoryUi.color`) but was
+consumed only by the summary bars and the Add-sheet chips — never by the list.
+
+### Context & Decisions
+1. **⭐ The palette was replaced, not just wired up.** The old twelve
+   Tailwind-500 values collided badly: 경조사 / 웨딩 / 의류 all sat within 30°
+   of red, and 식비 / 배달음식 were both orange-amber. Wiring those into the
+   list would have swapped "all red" for "mostly red" — the complaint would have
+   survived the fix. The new set spreads twelve hues 25–45° apart:
+   red · orange · yellow · lime · green · teal · sky · indigo · violet ·
+   fuchsia · pink, with slate for `Misc.`
+2. **⭐ `color` is now a method taking `isDark`, not a getter.** The old values
+   were mode-agnostic, which is why 배달음식 amber and Misc. slate washed out on
+   the white card. Each category now carries a darker light-mode value and a
+   lighter dark-mode one. `isDark` was already in scope at every call site — the
+   codebase threads it as a constructor arg rather than reading `ColorScheme` —
+   so this cost nothing at the call sites.
+3. **The values stay in `transaction_category_ui.dart`, not `AppColors`.**
+   They are category identity, not semantic tokens; `AppColors` holds the
+   positive/negative/warning language the trade rows still use.
+4. **Uncategorized purchases fall back to `misc` slate, not red.**
+   `transaction_summary.dart:157` already buckets a category-less purchase into
+   `Misc.` when aggregating, so the row and its summary bar now agree.
+5. **Badge text and row geometry unchanged** (both user's pick over the
+   alternatives shown in the mockup). The badge still reads "Purchase" — it just
+   takes the category color — and no edge stripe was added. The icon tile and
+   badge were already driven by the single `color` local, so the whole visual
+   change is one expression.
+6. **Trades are untouched.** `_typeColor` keeps all six cases and still colors
+   Buy / Sell / Transfer / Deposit / unknown. Only the purchase branch is
+   bypassed.
+7. **Read-only.** No sheet contract, no network, no POST path.
+
+### What shipped
+- **Presentation** (`extensions/transaction_category_ui.dart`): `Color get color`
+  → `Color color(bool isDark)`, twelve cases in enum-declaration order (matching
+  the `icon` getter above it) with a hue name comment per case.
+- **Presentation** (`sheet_view_page.dart`): `_TransactionTile` resolves
+  `isPurchase` / `cat` before the color and branches —
+  `isPurchase ? (cat ?? TransactionCategory.misc).color(isDark) : _typeColor(...)`.
+  `_CategoryBar` passes `isDark` through.
+- **Presentation** (`add_transaction_sheet.dart`): `_CategoryGrid` hoists a
+  `catColor` local; its four `cat.color` references now read from it.
+- **Tests** (+4 → 136): new
+  `test/presentation/extensions/transaction_category_ui_test.dart` — every
+  category has a distinct light color, a distinct dark color, and the two modes
+  differ per category. New case in `sheet_view_page_test.dart`: a month with a
+  식비 purchase and a 웨딩 purchase render two 20px tile icons in different,
+  palette-matching colors.
+
+### The 'Gravel' (this session)
+- **Not verified on-device.** No APK was built this session. The whole point of
+  the change is how it *looks*, and that is unjudged — see Next Immediate Step.
+- **The distinctness test compares exact `Color` values, not perceived
+  difference.** Two categories one hex apart would pass it. It catches the
+  regression that actually happened before (literal duplicates and near-clones
+  in the same family), not a subtle one.
+- **`_tileIconColor` in the widget test disambiguates by `size == 20`**, because
+  the summary card's category bars draw the same `IconData` at 14px. If the tile
+  icon size ever changes, that helper fails with "expected 1 element" rather
+  than anything descriptive.
+- **`AppColors.negative` is now unreachable for purchase rows** but stays in
+  `_typeColor`'s switch, which must remain exhaustive over `TransactionType`.
+  The analyzer does not flag it.
+- **The old palette's colors are gone with no migration note.** Anyone who had
+  learned the previous chip colors in the Add sheet sees them all change at
+  once — deliberate, but it is a visible break for a user who had memorized them.
+- Pre-existing and untouched: dead `groupByMonth()` + `MonthGroup` in
+  `transaction_summary.dart`; dead `currency_formatter.dart`; the two duplicate
+  `_typeColor` functions (this change touched only the `sheet_view_page.dart`
+  one's caller, not the duplication itself); `_NetCaption` still renders a zero
+  net flow as `+0`.
+
+## Next Immediate Step
+- **`flutter build apk`, install, and open Transactions** against the **Real**
+  sheet — this change is entirely visual and nothing above substitutes for
+  looking at it:
+  - ⭐ **A month of mixed spending reads as distinct colors**, and you can tell
+    two rows apart without looking at the icons. That is the whole acceptance
+    criterion.
+  - Each row's "Purchase" badge matches its icon tile.
+  - **The summary card's category bars match the rows below them** — same
+    palette, one source.
+  - The Add Transaction sheet's category chips match too.
+  - Buy / Sell / Transfer / Deposit rows are **unchanged** (blue / amber / cyan /
+    green).
+  - **Toggle the OS between light and dark** (`ThemeMode.system`, `main.dart:41`)
+    and check nothing washes out on white or glares on navy — **배달음식 yellow
+    and Misc. slate** are the two to look at.
+  - **Do not tap Add while verifying** — read-only.
+- The palette mockup the user chose Option B from:
+  https://claude.ai/code/artifact/a12a997e-6406-48aa-968e-c37ad7f5dadf
+- **The same APK settles two older milestones' checks too** — both are committed,
+  neither has been looked at on a device: the **Accounts tab** pass below
+  (balances match column G sign-and-all; no Brokerage or Crypto rows; a blank
+  balance shows —; Transactions amounts still carry ₩ / $), and the sell-only /
+  buy-only month checks from the milestone before it.
+
+## Previous Milestone
+**New Accounts tab — credit-card debt and bank balances (2026-08-06).** Analyzer
+clean, **132/132 tests**, release APK built. **Committed as `e653ed2`** —
+verified green in isolation before the palette work was stacked on it.
+
+The app had two tabs. Card debt and bank cash were invisible in it: the sheet's
+`Accounts` tab was already fetched on every launch, but only two of its columns
+were parsed (`Account Name`, `Currency`) and only to prefix transaction amounts
+with ₩ or $. Neither figure was on the Dashboard either — `DashboardDB1`'s
+`총 자산` is cash + stocks and explicitly excludes card debt.
+
+There is now a third tab, **Accounts**, between Dashboard and Transactions,
+listing every `Accounts` row whose `Type` is `Credit` or `Bank` with its
+`Current Balance`.
+
+### Context & Decisions
+1. **⭐ Zero new I/O.** `accountsProvider` already does `GET ?sheet=Accounts` and
+   caches the raw grid; this reads two more columns out of a response the app
+   was already holding. No repository change, no cache change, no `Code.gs`
+   change, no redeploy. The whole feature is **read-only**.
+2. **⭐ Balances render exactly as the sheet stores them, sign included** (user's
+   pick over normalizing card debt to a positive magnitude). If column G holds
+   `-512300` the app shows `₩-512,300`. The `Normal Sign` column is deliberately
+   *not* consulted. Same "don't guess" rule that makes an unknown currency
+   render as a bare number — and it means the on-device check is meaningful
+   rather than confirming an assumption the code baked in.
+3. **`currentBalance` is `double?`, not `double`.** A blank cell must not read as
+   `0`, which would look like a paid-off card. Renders as an em dash.
+4. **`Type` and `Current Balance` are OPTIONAL headers**, unlike `Account Name` /
+   `Currency` which still gate the parse. This is the one real risk the change
+   carried: making the new headers mandatory would mean a sheet without them
+   returns `const []`, silently stripping the currency symbol from **every**
+   Transactions row. There is a test pinning exactly that.
+5. **Brokerage and Crypto are omitted silently** (user's pick over a "6 others
+   not shown" footer). Brokerage is already on the Dashboard; a footer counting
+   rows the user never asked to see is noise.
+6. **No section totals** (user's pick) — a per-account list only. Note that a
+   total would have to be per-currency anyway; the app takes no FX feed, so KRW
+   and USD can't be summed into one figure.
+7. **`_money`/`_num` lifted out of `sheet_view_page.dart`** into
+   `presentation/shared/utils/money.dart` as `money()` / `plainNumber()`. The
+   new page must label amounts identically to the Transactions list, and copying
+   them would have made this the **third** currency formatter in the tree
+   (`currency_formatter.dart` is the dead second one — left alone, and *not*
+   reused: it truncates via `toInt()` and defaults unknown codes to ₩). This
+   also finally gives `_money` the direct test earlier sessions flagged as
+   missing. Behavior is unchanged; the ~10 call sites were renamed mechanically.
+
+### What shipped
+- **Domain** (`sheet_account.dart`): `SheetAccount` gained `type` (String,
+  defaulted `''`) and `currentBalance` (`double?`). Both are **defaulted**, so
+  the five existing construction sites — all in tests — kept compiling untouched.
+  New `SheetAccountList.ofType(String)` extension, mirroring
+  `TransactionAggregates` in `transaction_summary.dart`: case- and
+  whitespace-insensitive, so `' bank '` in the sheet still matches.
+- **Data** (`sheet_account_model.dart`): the two new headers anchored in the same
+  header row the parser already located, plus `_number(dynamic)` — `num` →
+  `toDouble()`, `String` → strip to digits/`-`/`.` then `tryParse` (covers a
+  balance pasted as `'₩1,234.50'`), anything else → null.
+- **Presentation**: new `pages/accounts/accounts_page.dart` — same
+  `GradientBackground` → `FeatureScaffold` → `RefreshIndicator` → `.when()`
+  shape as the other two pages, including the `async.isLoading` guard in the
+  error arm. Rows are `GlassCard`s reusing `AccountMonogram` from
+  `account_picker_field.dart`, so an account carries the same identity color it
+  has in the add-row picker. New `shared/utils/money.dart`.
+- **Shell** (`main.dart`): `_pages` is now three entries and a third `_NavItem`
+  (`Icons.account_balance_rounded`) sits at index 1; **Transactions moved from
+  index 1 to 2**. `IndexedStack` already preserves per-tab state.
+- **Docs** (`docs/data/sheets.md`): `Type`/`Current Balance` flipped to ✅ with
+  the gating-vs-optional header rule spelled out; new "Accounts page" section;
+  the stale `총 자산` note about those columns being unparsed corrected.
+- **Tests** (+19 → 132): 5 new model cases (live layout, text balance, blank →
+  null, **missing optional headers still yield accounts**, ragged rows) and 3
+  for `ofType`; new `money_test.dart` (6); new
+  `test/presentation/pages/accounts_page_test.dart` (5) — stubs
+  `accountsProvider` with an override, so no repository is constructed.
+
+### The 'Gravel' (this session)
+- **Not verified on-device yet.** APK built, not installed — see Next Immediate
+  Step. **The sign question (decision 2) can only be settled there.**
+- **`money()` puts the minus *after* the symbol**: `₩-512,300`, not `−₩512,300`.
+  Pre-existing and shipped — every negative-amount row on the Transactions list
+  already reads this way — so it was left alone, but a wall of negative card
+  balances is where it will look worst. `money_test.dart` pins the current
+  behavior, so changing it is a one-line edit plus one test.
+- **`ofType` matches the English strings `'Credit'` / `'Bank'` literally.** If a
+  Type cell is ever renamed (or typo'd) in the sheet, that account silently
+  vanishes from the page with no trace — the same failure mode as the
+  account-name currency join, and decision 5 means there is no footer count to
+  hint at it. The two constants are at the top of `accounts_page.dart`.
+- **The page has no updated-at label**, unlike the other two — `cachedAccountsAt()`
+  was never added to the repository (noted when the tab was first read in
+  `0af12d8`). The syncing bar under the app bar is the only freshness signal.
+- **`_SectionLabel` is duplicated** from `dashboard_page.dart` (private there).
+  ~12 lines of styled `Text`; lifting it to `shared/widgets/` would have touched
+  the Dashboard for no behavior change.
+- Pre-existing and untouched: dead `groupByMonth()` + `MonthGroup` in
+  `transaction_summary.dart`; dead `currency_formatter.dart`; the two duplicate
+  `_typeColor` functions; the Gradle KGP deprecation warnings on every APK
+  build; `_NetCaption` still renders a zero net flow as `+0`.
+
+## Next Immediate Step
+- **Install `build/app/outputs/flutter-apk/app-release.apk`** and open the new
+  **Accounts** tab against the **Real** sheet:
+  - ⭐ **Every balance matches column G exactly, sign and all.** This is the
+    decision the code deliberately left open — if credit balances read positive
+    (or negative) and that looks wrong, say so and it is a one-line fix in
+    `_AccountRow`, not a re-plan.
+  - Every `Credit` and `Bank` account from the sheet appears; **no** Brokerage or
+    Crypto row does. An account missing from the page means its `Type` cell is
+    spelled something else (see Gravel).
+  - An account with a blank `Current Balance` shows **—**, not `₩0`.
+  - Tab order is Dashboard / Accounts / Transactions, and all three keep their
+    scroll position when switching away and back.
+  - Airplane mode → relaunch: the cached grid still populates the tab.
+  - **Transactions amounts still carry ₩ / $** — this is the regression check for
+    both the formatter move and the new optional headers.
+  - **Do not tap Add while verifying** — the whole change is read-only.
+- Then commit: `sheet_account.dart`, `sheet_account_model.dart`,
+  `money.dart`, `accounts_page.dart`, `sheet_view_page.dart`, `main.dart`,
+  `docs/data/sheets.md`, the three test files, `HANDOVER.md`.
+- Still outstanding from the previous milestone: the sell-only / buy-only month
+  checks below (that code is committed; only its on-device pass is left).
+
+## Previous Milestone
+**Trade "Net" line removed; Divested is now "Sold" and reads as cash in
+(2026-08-04).** Analyzer clean, **113/113 tests**, release APK built.
+**Committed as `142ccd9`** (the "Uncommitted" note here was stale).
+
+The user's report: buying makes `Invested` climb (wanted), but selling makes
+`Divested` climb *and* drives the `Net` line to the exact negation of it — a
+red-looking number that is nothing but an echo of the line above.
+
+### Context & Decisions
+1. **⭐ The defect was the subtraction, not the two stats.**
+   `netInvested = invested − divested` treated a Sell as the cancellation of a
+   Buy. It isn't: sell proceeds carry whatever the position gained or lost, so
+   the difference is neither cash, nor capital deployed, nor P/L — a hybrid of
+   all three. In a sell-only month it degenerates to exactly `−divested`, which
+   is precisely what the user was looking at. **The fix is to delete the number,
+   not to relabel it.** The two gross magnitudes above it were already honest.
+2. **Selling was flagged as bad twice.** `Divested` was amber
+   (`AppColors.warning`) *and* the Net caption colored its negative case amber.
+   Money leaving the market is the one unambiguously cash-**positive** event on
+   the card. It is now green — the same `AppColors.positive` Income uses.
+3. **The card's color language is now coherent**: red = cash consumed
+   (Spending), green = cash in (Income, Sold), blue = cash deployed but *not*
+   consumed (Invested). That last distinction is the point of keeping Invested a
+   separate color rather than folding it in with Spending.
+4. **Labels: `Invested` / `Sold`** (user's pick over `Bought`/`Sold` and over
+   leaving both). "Invested" stays because watching it climb is the behavior the
+   user explicitly said they liked; "Divested" was the jargon half.
+5. **Two lines both labelled "Net" are now one.** `Net flow` (income − spending)
+   survives unchanged and is no longer ambiguous, since nothing else on the card
+   is called Net.
+6. **Three richer alternatives were considered and set aside** (see the plan
+   file `~/.claude/plans/currently-the-invested-and-ethereal-kettle.md`):
+   - *A unified monthly cash bottom line* (`income − spending + divested −
+     invested`) — arithmetically the most meaningful single figure, and it makes
+     a sell positive automatically. Rejected as a bigger structural change than
+     the complaint warranted.
+   - *Realized gain/loss per sale* — the number the user probably wants
+     eventually ("sold ₩800,000 at a +₩120,000 gain"). Every ingredient exists
+     in the rows (ticker, signed qty, price, account→currency), but it needs a
+     full-history per-ticker cost-basis pass (not `inMonth`), an
+     average-cost-vs-FIFO decision, and it would **lie silently** for any
+     position opened before the sheet's history begins. Its own milestone.
+   - *Dropping trades from the monthly card entirely* — conflicts with
+     decision 4.
+7. **Read-only.** No network call, no POST path, no sheet contract touched.
+
+### What shipped
+- **Domain** (`transaction_summary.dart`): **`netInvested` getter deleted** —
+  its only `lib/` consumer was the caption being removed. `divested` keeps its
+  field name; renaming it to `sold` would ripple through the entity,
+  `_Accumulator`, `CurrencySummary.zero`, `activity` and the tests for what is a
+  display-label change. Its doc comment already carries the rationale, which
+  this change *strengthens* rather than invalidates.
+- **Presentation** (`sheet_view_page.dart`): `_CurrencySection` — the second
+  `_StatBlock` is now `label: 'Sold'` / `valueColor: AppColors.positive`; the
+  trailing `SizedBox` + second `_NetCaption` are gone. `_NetCaption` lost its
+  `negativeColor` field and param (one call site remained, all passing
+  `AppColors.negative`), which is now used directly.
+- **Tests** (+1 → 113): four `netInvested` assertions in
+  `transaction_summary_test.dart` rewritten — two dropped as redundant with the
+  `invested`/`divested` assertions beside them (including in the test literally
+  named *"a buy and sell of equal size read as activity, not a zero"*, which the
+  removal strengthens), two replaced with explicit `invested == 0` /
+  `divested == 0`. One test renamed off the dead getter. New widget test in
+  `sheet_view_page_test.dart`: a **sell-only month** renders `Sold` / `₩800,000`
+  / `Invested`, `find.text('Net')` finds **nothing**, and `Net flow` survives.
+
+### The 'Gravel' (this session)
+- **Not verified on-device yet.** APK built, not installed — see Next Immediate
+  Step.
+- **`CurrencySummary.divested` is displayed as "Sold".** Deliberate (decision
+  above) but it is real name drift between domain and UI. If a third consumer of
+  the field ever appears, that is the moment to rename the field.
+- **The card is one line shorter in trade months.** The `AnimatedSize`
+  month-switch transition sizes against this card; the delta is small (one 12px
+  caption row) but it is a height change between a trade month and an
+  expense-only one. Watch it on-device.
+- **The sell-only widget test asserts `find.text('Net')` findsNothing**, which
+  passes only because `'Net flow'` is a distinct string from `'Net'`. If the
+  cash caption is ever renamed to plain `Net`, that assertion silently inverts
+  its meaning. It is guarded by the `Net flow` assertion on the next line.
+- **A month with trades still has no bottom line at all** — two gross numbers
+  and nothing tying them together. That is the intended outcome here, but it is
+  also exactly the gap the "unified cash bottom line" alternative would fill if
+  the card ever feels unfinished.
+- Pre-existing and untouched: dead `groupByMonth()` + `MonthGroup` in
+  `transaction_summary.dart`; the two duplicate `_typeColor` functions; the
+  unused `currency_formatter.dart`; the Gradle KGP deprecation warnings on every
+  APK build; `_NetCaption` still renders a zero net flow as `+0`.
+
+## Next Immediate Step
+- **Install `build/app/outputs/flutter-apk/app-release.apk`** and open
+  Transactions against the **Real** sheet:
+  - A **sell-only month** — the case that prompted this — reads `Invested ₩0`
+    and `Sold ₩800,000` **in green**, with **no line underneath**.
+  - A **buy-only month**: `Invested` climbs in blue, `Sold ₩0`, no net line.
+  - A month with **both**: two stats, neither cancelling the other.
+  - An **expense-only month**: the trade block is still hidden entirely, and
+    `Net flow` is still present and still red when negative.
+  - **Month switching still animates acceptably** across the new height (see
+    Gravel).
+  - **Do not tap Add while verifying** — this change is read-only.
+- Then commit: `transaction_summary.dart`, `sheet_view_page.dart`,
+  `transaction_summary_test.dart`, `sheet_view_page_test.dart`, `HANDOVER.md`.
+
+## Previous Milestone
+**Summary card reworked: currency-scoped totals, income, invested/divested
+(2026-08-03).** Analyzer clean, **112/112 tests**, release APK built.
+**Committed as `e90635e`, pushed.**
+
+> **Follow-up fix, same day:** an empty month rendered the card as a **circle**.
+> See "Empty-month card" below — **committed as `84f50d0`, pushed**. The APK
+> above **predates it**, so rebuild before verifying on-device.
+
+The card showed two stats — Spending and Net invested — that between them had
+four problems. All four were fixed in one pass.
+
+### Context & Decisions
+1. **⭐ The card's totals added KRW and USD into one meaningless number.** The
+   real defect, made visible by the per-row currency work in `0af12d8`: the
+   card's total matched no single row's currency. `summarize()` now splits by
+   currency and emits a `CurrencySummary` per code. **No FX conversion** — the
+   project takes no live rate feeds.
+2. **Sections stack; there is no currency toggle.** The user confirmed a month
+   almost always has exactly one currency, so both layouts collapse to the same
+   thing in the common case. A control seen twice a year is one you've
+   forgotten, and it would hide a second currency behind a tab you'd never think
+   to tap. **The currency header is suppressed when there is only one section** —
+   the ₩/$ prefixes already establish scope — so a normal month's card reads
+   almost exactly like the old one.
+3. **⭐ Safeguard: if *no* row resolves a currency, everything lands in one
+   unlabelled section.** Without this, an unreachable `Accounts` tab (or the
+   window before it loads) would render an all-zeros card — strictly worse than
+   before. Same philosophy as `fetchDashboard`'s missing-`grid` guard: all-zero
+   numbers look like real data. Rows that can't be placed are otherwise excluded
+   and **reported** in a footer note naming the reason.
+4. **Deposits are now Income**, with a `Net flow` (income − spending) caption.
+   They were previously dropped from every total, so a month had no notion of
+   surplus or deficit.
+5. **Net invested split into Invested / Divested**, two positive magnitudes,
+   with the net underneath. Netting alone made a month where you bought ₩800k
+   and sold ₩800k read as a flat zero — indistinguishable from no trading.
+6. **The top-4 category cap is gone; every category with spend gets a bar.**
+   Side benefit: the cap folded its tail into `TransactionCategory.misc`, so a
+   genuine `Misc.` spend and "everything else, small" were indistinguishable.
+   Now `Misc.` means only itself. Categories summing to **zero** are dropped —
+   an empty bar labelled `₩0` is noise.
+7. **Read-only.** No new network call at all; nothing in the POST path touched.
+
+### What shipped
+- **Domain** (`transaction_summary.dart`, substantially rewritten):
+  `TransactionSummary` is now `{List<CurrencySummary> byCurrency, UncountedRows
+  uncounted}`. New `CurrencySummary` (spending, income, invested, divested,
+  per-currency category bars; `netFlow` / `netInvested` / `activity` getters)
+  and `UncountedRows {unknownType, unknownCurrency}`. `summarize()` takes an
+  optional `currencies` map and buckets rows through a private `_Accumulator`
+  that holds the per-type switch. **`_capCategories` deleted** (orphaned by the
+  change; no test covered it).
+- **Domain** (`sheet_account.dart`): `SheetAccount.key(name)` —
+  `trim().toLowerCase()`, the account-join normalization, now defined once and
+  used by all three join sites (provider, `summarize`, the tile lookup).
+- **Presentation** (`sheets_providers.dart`): `selectedMonthSummaryProvider`
+  watches `accountCurrenciesProvider` and passes it to `summarize`, so the card
+  re-splits the moment the Accounts tab lands.
+- **Presentation** (`sheet_view_page.dart`): `_SummaryHeader` now renders one
+  `_CurrencySection` per currency (divided, header only when >1) plus the
+  uncounted note (`_uncountedNote`). New `_NetCaption` for the two net lines.
+  `_CategoryBar` gained a `currency` and prints via `_money` instead of `_num`.
+  The Invested/Divested block is hidden entirely when both are zero, so
+  expense-only months stay as compact as before.
+- **Tests** (+10 → 108): `transaction_summary_test.dart` reworked — existing
+  three moved to `byCurrency.single.…`, plus currency splitting/ordering,
+  the no-currency safeguard, partial knowledge, unmapped transfers not counted,
+  case/space-insensitive account matching, income + net flow, the equal
+  buy/sell case, all-categories-shown, and zero-category omission.
+
+### The 'Gravel' (this session)
+- **Not verified on-device yet.** APK built, not installed.
+- ⚠️ **The card is what the month-switch animation sizes against**
+  (`AnimatedSize`, the 2026-08-02 milestone). Removing the category cap raises
+  its worst case from 5 bars to **12**, and the new Income/Net-flow/Invested
+  rows add height too. Build cost is not the concern (the row list was the
+  bottleneck, not the card) — what to watch for is a longer, more noticeable
+  height animation between months with very different category counts. If it
+  reads badly the lever is the `AnimatedSize` duration/curve, **not** re-adding
+  the cap.
+- **A category that nets negative is dropped along with the zero ones** (the
+  filter is `> 0`). Only reachable if refunds are ever entered as
+  negative-amount expense rows; if that starts happening, the visible bars would
+  no longer sum to Spending.
+- **`totalIncome` sums Deposit amounts as stored.** A negative-Amount Deposit
+  would reduce income rather than being treated as an expense — honest to the
+  sheet, but untested against real data since nothing writes Deposits.
+- **The uncounted note is static text, not a tap target.** It names the reason
+  ("1 account missing from Accounts") but not *which* account — cross-reference
+  the bare-number rows in the list below it.
+- ~~`TransactionSummary.empty` has an empty `byCurrency` … safe by
+  construction.~~ **Wrong — this was the bug.** See "Empty-month card" below.
+- Pre-existing and untouched: dead `groupByMonth()` + `MonthGroup` in
+  `transaction_summary.dart`; the two duplicate `_typeColor` functions; the
+  Gradle KGP deprecation warnings on every APK build.
+
+## Empty-month card — the circle bug (2026-08-03, follow-up)
+A month with no transactions rendered the summary card as a **small circle**.
+
+### Context & Decisions
+1. **Cause was layout collapse, not arithmetic.** `summarize()` returns
+   `TransactionSummary.empty` for a month with no rows, so `byCurrency` is `[]`
+   and `uncounted.isEmpty` is true — `_SummaryHeader`'s `Column` got **zero
+   children**. The card then shrank to its own `EdgeInsets.all(18)` padding, and
+   an 18px `borderRadius` on the resulting ~36px box is exactly a circle. The
+   one division in the domain layer (`fraction`) was already guarded and is
+   **not** implicated.
+2. **⭐ The card now shows zeroed stats rather than hiding** (user's choice over
+   hiding it or showing a placeholder message). Keeps the layout stable across
+   months. The trade-off accepted: zeros can read as real data — mitigated by
+   the `_MonthEmptyNotice` directly below, which still says "No transactions in
+   {Month} {Year}".
+3. **The zero section carries a `null` currency**, so amounts render unlabelled
+   via `_money`'s existing `null || ''` arm. No row means no currency to name,
+   and inventing one (KRW) would be a guess.
+4. **`byCurrency.isEmpty` is an exact "no rows" signal.** Verified: a month whose
+   rows are *all* unknown-type still takes `summarize()`'s `buckets.isEmpty`
+   branch and yields one all-zero section, so the guard has no false positives.
+
+### What shipped
+- **Domain** (`transaction_summary.dart`): `CurrencySummary.zero` — an all-zero,
+  null-currency const, sibling to `TransactionSummary.empty`.
+- **Presentation** (`sheet_view_page.dart`): `_SummaryHeader.build` computes
+  `sections = byCurrency.isEmpty ? [CurrencySummary.zero] : byCurrency` and
+  iterates that. `showHeader` reads `sections.length > 1`. **No other change** —
+  `_CurrencySection` already hides the Invested/Divested block when both are
+  zero and the category list when it is empty, so the empty card lands on
+  exactly Spending / Income / Net flow.
+- **Tests** (+4 → 112): new `test/presentation/pages/sheet_view_page_test.dart`
+  — the first widget test to pump a whole page. Stubs `transactionsProvider`,
+  `accountsProvider` and `transactionsUpdatedAtProvider` (that last one reaches
+  for the repository directly), so no repository or network is constructed.
+  Covers: stat blocks present, card width not collapsed, zeros unlabelled, and a
+  populated month still showing real totals. **Confirmed to fail without the
+  fix** (3 of the 4 fail; the populated-month case still passes).
+
+### The 'Gravel' (this session)
+- **A zero net flow renders as `+0`.** `_NetCaption` treats any non-negative
+  value as `+` (`sheet_view_page.dart:547`). Pre-existing and reachable in a real
+  month too (income exactly equals spending) — left untouched as out of scope,
+  but it is the odd-looking part of the empty card.
+- **The empty state now says "nothing here" twice** — zeroed card plus the
+  `_MonthEmptyNotice` below it. Accepted deliberately (decision 2); if it reads
+  as redundant on-device, the lever is dropping the notice, not the card.
+- **The width assertion in the widget test is loose** (`greaterThan(200)`). It
+  separates a 36px circle from a full-width card, which is the regression that
+  matters; it is not a layout-precision test.
+- **`CurrencySummary.zero` has no domain test of its own** — it is covered
+  through the widget tests. It is a const with no logic.
+- The card's `AnimatedSize` now animates between a zeroed card and a populated
+  one when switching months. Not observed on-device yet.
+
+## Next Immediate Step
+- **Rebuild the APK** (`flutter build apk`) — the existing one predates the
+  empty-month fix — then install and check a **month with no transactions**:
+  the card is a normal full-width card reading Spending `0` / Income `0` /
+  Net flow `+0`, with "No transactions in …" below it, and **both arrows still
+  work** from that month.
+- **Install `build/app/outputs/flutter-apk/app-release.apk`** and open
+  Transactions against the **Real** sheet:
+  - A normal single-currency month shows **no currency header** and reads like
+    the old card, with ₩/$ on every figure.
+  - Spending still equals the sum of its category bars, and **every** category
+    with spend has a bar — no "Other" fold, no empty ₩0 bars.
+  - A month with Deposits shows Income and a Net flow equal to income −
+    spending; a month with trades shows Invested/Divested; an expense-only
+    month hides that block entirely.
+  - If a KRW+USD month exists, both sections appear with headers and their own
+    bars.
+  - The uncounted note, if present, names how many rows and why.
+  - **Month switching still animates acceptably** — especially between months
+    with very different category counts (see Gravel).
+  - **Do not tap Add while verifying** — this change is read-only.
+- ~~Then commit.~~ **Done** — shipped as `e90635e` (`transaction_summary.dart`,
+  `sheet_account.dart`, `sheets_providers.dart`, `sheet_view_page.dart`, the two
+  test files). Only the on-device verification above is still outstanding.
+
+## Previous Milestone
+**Per-row currency from the sheet's `Accounts` tab (2026-08-03).** Analyzer
+clean, **98/98 tests**, release APK built. **Committed as `0af12d8`, pushed.**
+
+Transaction amounts were bare, unlabelled numbers — a ₩12,500 lunch and a
+$12,500 trade looked identical. Each row's amount now carries its account's
+currency: `₩12,500` / `$1,234.56`.
+
+### Context & Decisions
+1. **⭐ The currency source is an existing sheet column, not a new one.** This
+   was the open question that parked multi-currency back in June (options were:
+   add a Currency column / infer from the account name / hardcode). It turned
+   out the **`Accounts` tab already had it** — `Account Name` in column A,
+   `Currency` in column D. No sheet change, no inference, no guessing.
+2. **No backend change and no redeploy.** `Code.gs`'s `doGet` already serves any
+   tab as a raw grid via `?sheet=<name>` (the path `DashboardDB1` uses), so
+   `?sheet=Accounts` worked against the deployed script as-is. Verified live
+   before writing the parser: the response's header row is exactly
+   `Account Name | Type | Institution | Currency | Include? | …`.
+3. **Read-only by construction** (explicit user requirement — nothing may be
+   written to the sheet). The feature adds exactly one call, a `GET`; the POST
+   path, `appendTransaction`, `toRows`, and `add_transaction_sheet.dart` are all
+   untouched, and the app never writes the `Accounts` tab.
+4. **Header-anchored parsing, not fixed A/D indices** — same rationale as
+   `DashboardSummaryModel.fromGrid`. Find the `Account Name` cell, then
+   `Currency` in that same header row, so a column inserted in the tab does not
+   silently shift the mapping.
+5. **A broken/missing `Accounts` tab must not break the Transactions page.**
+   Unlike `fetchDashboard` (where a missing `grid` is a hard `Failure`, because
+   all-zero KPIs look like real data), `_parseAccountsBody` degrades to `const
+   []` on an error payload, a missing grid, or missing headers. The tab only
+   supplies labels.
+6. **Unmapped rows render exactly as before — a bare number** (user's choice
+   over defaulting to KRW or USD). Honest, and it makes accounts missing from
+   the `Accounts` tab visible at a glance.
+7. **KRW prints with no decimals** (`#,##0`) since the won has no minor unit;
+   USD keeps today's `#,##0.##`. An unfamiliar code is prefixed literally
+   (`EUR 12.5`) rather than guessed at.
+8. **Summary card totals deliberately still mix currencies.** Out of scope per
+   the user; see Gravel.
+
+### What shipped
+- **Domain**: `entities/sheet_account.dart` (`SheetAccount {name, currency}`);
+  `i_sheets_repository.dart` gained `fetchAccounts()` + `cachedAccounts()`
+  (no `cachedAccountsAt()` — nothing shows an accounts freshness label).
+- **Data**: `models/sheet_account_model.dart` (`fromGrid`, header-anchored);
+  `sheets_repository_impl.dart` — `fetchAccounts()` + `_parseAccountsBody()` +
+  `cachedAccounts()`, modelled on the dashboard trio; `sheets_local_cache.dart`
+  — `cache.accounts.body.{profileId}.v1` (body only, no timestamp key), included
+  in `evict()`; `logging_sheets_repository.dart` — two pass-throughs in the
+  reads block (reads stay unlogged).
+- **Presentation**: `sheets_providers.dart` — `accountsProvider`
+  (`StreamProvider`, reuses `_cachedThenLive` verbatim) and
+  `accountCurrenciesProvider` (`Map<String,String>`, keys trimmed+lowercased,
+  blank currencies dropped). `sheet_view_page.dart` — new top-level
+  `_money(double, String?)`; `_TransactionTile` gained a `String? currency`
+  field; `_TransactionsListState.build` watches the map **once** and passes the
+  code per tile (no per-tile `ref.watch` — the sliver builder is the hot path
+  from the previous milestone).
+- **Docs**: `docs/data/sheets.md` — new "Accounts tab" section (column table,
+  header-anchoring, the fallback rule); the stale "Account names" section now
+  says the picker comes from the Transactions tab via `accountOptionsProvider`,
+  not from `Accounts`.
+- **Tests** (+11 → 98): new `test/data/models/sheet_account_model_test.dart`
+  (live layout, inserted column, trimming/upper-casing, blank currency, nameless
+  rows, missing headers, ragged rows); 3 `accountCurrenciesProvider` cases;
+  accounts round-trip + evict in the cache test. Both `ISheetsRepository` fakes
+  (`_FakeRepo`, `_FakeDelegate`) implement the two new members — `_FakeRepo`
+  gained a scriptable `accountsResult`.
+
+### The 'Gravel' (this session)
+- **Not verified on-device yet.** The APK is built but not installed — see Next
+  Immediate Step.
+- ~~The summary card still adds KRW and USD into one Spending / Net invested
+  number.~~ **Resolved by the current milestone** — that gravel note is what
+  prompted it.
+- **This adds a third GET on the Transactions page** (`?sheet=Accounts`). It is
+  cache-first, so it never blocks first paint, and its label
+  (`'accountsProvider'`) is *not* what the syncing bar watches
+  (`isFetchingProvider('transactionsProvider')`) — so the bar's behavior is
+  unchanged. A cold start with no cache retries it twice before giving up, same
+  as the others.
+- **The currency join is by account *name* string.** Rename an account in the
+  Transactions tab without renaming it in `Accounts` (or vice versa) and that
+  row silently loses its symbol. Trimming + lowercasing absorbs whitespace and
+  case drift only.
+- **`_money` is a private top-level function in `sheet_view_page.dart` and has
+  no direct test** — coverage is at the model and provider level. It is 12 lines;
+  if it grows (more currencies, negative-sign styling), lift it out to a shared
+  util and test it.
+- The `Accounts` tab's `Current Balance` / `Type` columns are read into the grid
+  but **not** parsed — they are what a future net-worth extension (crypto + card
+  debt, absent from `DashboardDB1`) would sum.
+- Pre-existing and untouched: the Gradle KGP deprecation warnings on every APK
+  build (`shared_preferences_android`); the two duplicate `_typeColor` functions
+  (`sheet_view_page.dart` / `add_transaction_sheet.dart`); dead `groupByMonth()`
+  + `MonthGroup` in `transaction_summary.dart`.
+- **Stale notes now corrected**: the previous milestone's "Uncommitted" claim was
+  wrong (it shipped as `942182b`), and its gravel item about
+  `currency_formatter.dart` is moot — that file no longer exists.
+
+### Next steps (carried over — still not verified on-device)
+- Open Transactions against the **Real** sheet:
+  - KRW accounts show `₩` with no decimals; USD accounts (e.g. 토스증권 달러,
+    토스증권 해외 주식) show `$`.
+  - Both legs of a Buy/Sell pair show the same symbol when the cash and
+    brokerage accounts share a currency.
+  - Note any row still rendering a **bare number** — that account is missing
+    from the `Accounts` tab (or its Currency cell is blank). Those are rows to
+    add to the sheet, not a bug.
+  - Airplane mode → relaunch: cached currencies still render.
+  - **Do not tap Add while verifying** — this change is read-only and the append
+    flow is unrelated.
+- Then commit: `sheet_account.dart`, `sheet_account_model.dart`,
+  `i_sheets_repository.dart`, `sheets_repository_impl.dart`,
+  `sheets_local_cache.dart`, `logging_sheets_repository.dart`,
+  `sheets_providers.dart`, `sheet_view_page.dart`, `docs/data/sheets.md`, the
+  four test files, `HANDOVER.md`.
+
+## Previous Milestone
+**Transactions month-switch motion made smooth (2026-08-02).** Analyzer clean,
+**87/87 tests**. **Committed as `942182b`.** Verified on a physical device with
+a release build (2026-08-03): the motion reads clean.
+
+The month-change animation looked janky. Three separate causes, found and fixed
+in order by driving the iPhone 17 simulator and capturing mid-transition frames.
+
+### Context & Decisions
+1. **`AnimatedSize` wrapped directly around `AnimatedSwitcher` stalls, then
+   snaps.** `AnimatedSwitcher`'s default `layoutBuilder` leaves outgoing children
+   unpositioned, so while both children are mounted the `Stack` sizes to their
+   **union** — `AnimatedSize` sees that inflated size for the whole crossfade and
+   only learns the real target when the old child unmounts at the very end.
+   Captured frames showed the old month's category bars and rows still occupying
+   full height most of the way, then a hard collapse.
+   Fix: `_topAlignedSwitcherLayout` — a `layoutBuilder` that wraps previous
+   children in `Positioned`, excluding them from the Stack's sizing pass. Plus
+   `alignment: Alignment.topCenter` on the `AnimatedSize` so it grows from a
+   fixed top anchor instead of the center (the card used to drift vertically).
+2. **Cross-fading the row list doubled the tile cost.** Both months' tiles stayed
+   mounted for the whole 260ms. Removed the row list's animation entirely — it
+   now swaps instantly. Only the card animates; it is bounded at ≤5 category
+   bars, so it is cheap regardless of how many transactions the month has.
+3. **⭐ The real bottleneck: the rows were a `Column` inside a `ListView`.**
+   A `Column` counts as **one** scroll child, so `ListView` virtualization never
+   applied to it — *every* tile in the month was built and laid out in the frame
+   the month changed. Measured against the live sheet: **March/April hold 131–134
+   rows**, so each switch was constructing ~131 tiles (~1,300+ widgets)
+   synchronously. This is why light months felt fine and heavy months did not.
+   Fix: `ListView` → `CustomScrollView`; the rows are now a lazy
+   `SliverList.builder`. Verified by temporary `debugPrint` instrumentation
+   (since removed): a switch into a 131-row month builds **8 tiles, not 131** —
+   ~16× less per-switch build work, and now flat in month size.
+
+### What shipped
+All in `lib/presentation/pages/sheet/sheet_view_page.dart`:
+- New top-level `_topAlignedSwitcherLayout(currentChild, previousChildren)`.
+- `_TransactionsList` is now a `ConsumerStatefulWidget` building a
+  `CustomScrollView`: a `SliverList.list` header (updated-at label, `_MonthBar`,
+  the animated summary card) + a `SliverList.builder` of tiles (or a
+  `SliverToBoxAdapter` empty notice) + a trailing 96px spacer sliver.
+- **`_MonthSection` / `_MonthSectionState` deleted.** Its direction state
+  (`_direction`, `_lastKey`) and the `_slide` transition builder moved verbatim
+  into `_TransactionsListState`; behavior is unchanged.
+
+### The 'Gravel' (this session)
+- ⚠️ **Profile mode does not run on the iOS simulator** ("Profilemode is not
+  supported by iPhone 17"), so every observation this session was **debug mode**,
+  which inflates widget-build cost substantially. The structural win is real in
+  both modes, but the *felt* smoothness should be judged on a physical device or
+  a release build — see Next Immediate Step.
+- The frame captures were `xcrun simctl io booted screenshot` in a tight loop
+  (~8–16 frames over the 260ms transition). Crude but it is what made causes 1
+  and 2 visible. There is **no frame-timing profile** — the 8-vs-131 tile count
+  is a build-work proxy, not a measured ms-per-frame improvement.
+- The previous milestone's gravel note about "`_MonthSection` derives slide
+  direction by comparing keys across builds" **still applies**, but the class is
+  now `_TransactionsListState`. The caveat is unchanged: it assigns fields in
+  `build` and calls no `setState`; don't "fix" it into a `ref.listen` without
+  re-checking direction on the first tap after a data refresh.
+- The old "no explicit `ClipRect` around the sliding card" note still holds — the
+  scroll viewport provides the hard edge, now a `CustomScrollView`'s.
+- Simulator automation needed **Accessibility permission** for the terminal app
+  (System Settings → Privacy & Security → Accessibility) before `osascript`
+  clicks would land; without it every click silently fails with `-25211`.
+- Untouched and still dirty from before this session: `ios/Runner.xcodeproj/
+  project.pbxproj`, `ios/Runner.xcworkspace/contents.xcworkspacedata`, plus an
+  untracked `ios/Podfile.lock` and a stray file literally named `-`.
+
+### Resolved (2026-08-03)
+- ✅ **Judged on a physical device with a release build — the animation reads
+  clean.** The simulator debug-mode caveat above was overstating the cost, as
+  suspected. The `_TransactionTile` follow-up lever (`RepaintBoundary` per tile)
+  is therefore **not needed** and was not pursued. Committed as `942182b`.
+
+## Previous Milestone
+**Month selector on the Transactions page (2026-07-30).** Analyzer clean,
+**87/87 tests**, release APK built. Committed to `main`.
+**Not verified on-device yet.**
+
+The page showed *all* rows grouped by month with a summary card hardcoded to the
+current month, so past months' spending/net-invested/category breakdown were
+unreachable. It now shows **one month at a time** with ◀ / ▶ arrows, defaulting
+to the current month.
+
+### Context & Decisions
+- **No backend change, and none was needed.** `fetchTransactions()` already GETs
+  the entire sheet in one request and caches the raw body, so every month was
+  already in memory. Month filtering is pure client-side work — `Code.gs` was not
+  touched and needs no redeploy.
+- The domain helper already took parameters: `TransactionAggregates.inMonth(year,
+  month)`. The only thing hardcoding "now" was the provider. Nothing was added to
+  the domain layer for this feature.
+- **Arrows live outside the animated region** (`_MonthBar`, static, above the
+  card). A control that slid away with the content it drives would be untappable
+  mid-flight. This is why the month label moved out of the summary card and into
+  the bar — the card's old `'This month'` / `'June 2026'` header row is gone.
+- **Slide without a new dependency**: `AnimatedSwitcher` + a `transitionBuilder`
+  that tests each child's key against the current month. This is the non-obvious
+  bit — `AnimatedSwitcher` runs the *outgoing* child's animation in reverse, so a
+  single tween sends both children the same way; the key test is what makes
+  incoming enter from one side while outgoing leaves the other. Reproduces
+  `SharedAxisTransition` without pulling in the `animations` package.
+- **`PageView` was rejected**: it forces every page to the viewport height, which
+  fights the card's variable height (0–5 category bars).
+- Nav is **clamped to the data range** (oldest row month → current month), so the
+  arrows can't walk forever into empty months.
+
+### What shipped
+- **Presentation** (`sheets_providers.dart`): `SelectedMonthNotifier` +
+  `selectedMonthProvider` (a `DateTime` normalized to the 1st; `DateTime(y, m+n)`
+  handles year rollover, so there is no manual month arithmetic anywhere).
+  `monthBoundsProvider` (`MonthRange` record), `monthNavProvider` (the two arrow
+  enabled-flags), `selectedMonthSummaryProvider`,
+  `selectedMonthTransactionsProvider`.
+  **Removed**: `currentMonthSummaryProvider`, `transactionsByMonthProvider`.
+- **Presentation** (`sheet_view_page.dart`): new `_MonthBar`, `_MonthSection`
+  (the animated part), `_MonthEmptyNotice`. `_MonthHeader` removed — redundant
+  with one month on screen. `_SummaryHeader` lost its header row and gained a
+  `super.key` (the `AnimatedSwitcher` needs to key it).
+- **Presentation** (`add_transaction_sheet.dart`): on a successful append, also
+  `selectedMonthProvider.notifier.select(tx.date)` — otherwise adding a
+  today-dated row while viewing a past month looks like nothing happened.
+- **Tests**: 9 new in `test/presentation/providers/sheets_providers_test.dart`
+  (year-boundary shifts both ways, bounds, both arrow limits, gap month, past-month
+  aggregates). The existing `_tx` helper gained optional `date`/`amount` params.
+
+### The 'Gravel' (this session)
+- **`groupByMonth()` + the `MonthGroup` entity are now dead code**
+  (`transaction_summary.dart:53-71, 173-193`). Their only caller was the deleted
+  `transactionsByMonthProvider`. Left in place deliberately — pure, tested
+  (`transaction_summary_test.dart:54`), zero runtime cost — but nothing calls them.
+  Delete them and their test if you want the domain layer tidy.
+- **`_MonthSection` derives slide direction by comparing keys across builds**
+  (`_lastKey`), not via `ref.listen`. Deliberate: it does not depend on Riverpod's
+  notification ordering. It assigns fields in `build` but calls no `setState`, so
+  it is safe — don't "fix" it into a listener without checking the direction is
+  still right on the first tap after a data refresh.
+- **No explicit `ClipRect` around the sliding card.** The `ListView` viewport
+  provides the hard edge; clipping to the card's own bounds would chop its
+  light-mode shadow (`blurRadius: 20`). The card *is* meant to overflow into the
+  16px page margin during transit.
+- `_kSlideExtent = 0.2` is a fraction of the card's width, not pixels. Tune there
+  if the motion feels wrong on a real device.
+- **Swipe gestures were not added** — arrows only, as specified. The sliding
+  motion does rather invite a horizontal drag, so expect to want it.
+- Pre-existing, untouched: the Gradle KGP deprecation warnings on every APK build
+  (`shared_preferences_android`), and the two duplicate `_typeColor` functions
+  noted in the previous milestone.
+
+## Next Immediate Step
+- Install the built APK (`build/app/outputs/flutter-apk/app-release.apk`) and
+  check on-device: opens on the current month; ◀ slides the card in from the left
+  and ▶ from the right, with the rows below cross-fading; both arrows grey out at
+  their ends; a month with no rows shows "No transactions in …" **and keeps the
+  arrows usable**; card height animates smoothly between months with different
+  category counts; adding a row while viewing a past month jumps to that row's
+  month.
+- Still outstanding from the previous milestone (**not yet done**): confirm
+  Deposit rows render green with a downward arrow and that the spending total is
+  higher than it used to be. That code shipped in `27c8ce6`; only the on-device
+  check is left.
+
+## Previous Milestone
+**Deposit rows no longer render as "Purchase" (2026-07-30).** Analyzer clean,
+**78/78 tests**. **Committed as `27c8ce6`.**
+
+### The bug
+`TransactionTypeX.fromSheet` used `default: return purchase`, so *every*
+unrecognized `Type` value became a Purchase. `Deposit` exists in the live sheet
+but appeared nowhere in `lib/`, `docs/`, or `test/` — so Deposit rows showed the
+red "Purchase" badge with a shopping-bag icon, and (worse, and not visible as a
+label bug) `summarize()` ran `spend = -amount` on them, so a positive-Amount
+Deposit **subtracted** from `totalSpending` and polluted the `Misc.` category
+bucket. The summary header was understating spending.
+
+### What shipped
+- **Domain** (`transaction_type.dart`): two new members — `deposit` (read-only:
+  cash in, entered in the sheet) and `unknown` (fallback). `fromSheet` now
+  matches every known value **explicitly** (`expense`/`purchase` → `purchase`,
+  plus `deposit`); the `default` branch returns `unknown`, not `purchase`.
+  `userSelectable` is unchanged, so the add-transaction form still offers
+  exactly four types. `unknown.sheetValue` **throws** `UnsupportedError` — it is
+  never written, and a throw beats silently appending a bogus Type.
+- **Domain** (`sheet_transaction.dart`): new `String? rawType` — the sheet's raw
+  Type cell, populated by the model **only** when the type is `unknown`, so an
+  unrecognized row can be badged with the sheet's own wording instead of a
+  generic "Other". Null for every recognized type.
+- **Domain** (`transaction_summary.dart`): `deposit`/`unknown` break out of
+  `summarize()` — neither spending nor investing. **This is the total-fixing
+  line**; expect the spending total to go *up* to its correct value.
+- **Presentation** (`sheet_view_page.dart`): deposit → green
+  (`AppColors.positive`) + `arrow_downward`; unknown → gray
+  (`textTertiaryLight`) + `help_outline`. Badge is `tx.rawType ?? tx.type.label`.
+- **Docs**: `docs/data/sheets.md` Type column + two new "Row types" bullets.
+
+### The 'Gravel'
+- ⚠️ **The title switch in `_TransactionTile` ends in a `_ =>` wildcard**
+  (`sheet_view_page.dart:361`), so it does **not** fail to compile when a
+  `TransactionType` member is added — new members silently fall into
+  `ticker ?? label`. Every other type switch is exhaustive and *will* error, so
+  the analyzer is a reliable checklist for all of them **except that one**.
+- `flutter analyze` caught a switch the exploration pass missed:
+  `add_transaction_sheet.dart:92` (`_save`'s tx-building switch). It now has a
+  `deposit || unknown => throw UnsupportedError` arm — unreachable, since the
+  form is driven by `userSelectable`.
+- **Two duplicate `_typeColor` functions** (`sheet_view_page.dart:472` and
+  `add_transaction_sheet.dart:456`) both had to be updated. They already
+  disagree cosmetically: the form hardcodes `0xFFF59E0B` for `sell` where the
+  page uses `AppColors.warning` (same value). Not merged — out of scope.
+- One pre-existing test encoded the old behavior and was flipped:
+  `{'type': 'wat'}` now expects `unknown`, not `purchase`.
+- **Not verified on-device yet** — see Next Immediate Step.
+
+### Next Steps (carried over — still not verified on-device)
+- Install, open Transactions and confirm against the real
+  sheet: Deposit rows are green **DEPOSIT** with a downward arrow and a positive
+  amount; the summary header's spending total is now **higher** (Deposits stopped
+  subtracting); Expense rows still read "Purchase"; the add form still shows four
+  type chips.
+- Watch for gray **help_outline** rows — each one is a Type string in the sheet
+  the app doesn't know. The badge shows the sheet's own wording, so it names
+  whatever needs adding to `fromSheet` next.
+
+## Previous Milestone
+**Runtime sheet switcher + local API audit log (2026-07-06, verified 2026-07-08).** Two new
+features fully implemented and tested on-device. `flutter analyze` clean,
+**73/73 tests**. **Committed as `e57ffbd`.** Real sheet endpoint verified working.
+
+### Feature 1 — switch between sheets at runtime (two fixed slots)
+Sheet config is no longer the compile-time `AppConfig` const; it is a runtime
+**profile** the repository reads per call. Two fixed slots: **Test** (seeded
+from `AppConfig` on first run) and **Real** (starts empty — user pastes the
+copied spreadsheet's own `/exec` URL + API key in-app).
+- **Domain**: `entities/sheet_profile.dart` — `SheetProfile {id,name,webAppUrl,
+  apiKey}` + `isConfigured`; `testId`/`realId` consts.
+- **Data**: `datasources/sheet_profile_store.dart` (prefs slots + active id;
+  seeds Test from `AppConfig`, **re-seeds** if the stored Test URL is
+  empty/null and config is now non-empty). `SheetsRepositoryImpl` **no longer
+  reads `AppConfig` statically** — endpoint injected via `webAppUrl`/`apiKey`
+  ctor params. `SheetsLocalCache` keys now **namespaced by `profileId`**
+  (`cache.transactions.body.{id}.v1`) + an `evict(profileId)` method.
+- **Presentation**: `providers/preferences_providers.dart` (holds
+  `sharedPreferencesProvider`, moved out of `sheets_providers.dart` to break an
+  import cycle; re-exported so `main.dart` is untouched);
+  `providers/sheet_profile_providers.dart` — `SheetProfilesNotifier`
+  (`switchTo`, `updateProfile`) + `activeSheetProfileProvider`.
+  `sheetsRepositoryProvider` now rebuilds from the active profile → the stream
+  data providers refetch and the namespaced cache shows the right sheet
+  instantly. `updateProfile` **evicts that slot's cache when its URL changes**
+  (key-only edits keep the cache). UI: `pages/settings/settings_page.dart`
+  (two slot cards, switch-on-tap, edit sheet with masked key + reveal, links to
+  History); entry point is a **gear icon in the Dashboard AppBar** (no third
+  nav tab).
+
+### Feature 2 — local API audit log (mutations only, NOT reads)
+Every sheet-mutating call is recorded on-device so app actions can be
+reconciled against the sheet on a mismatch. Cap **500 newest** entries.
+- **Domain**: `entities/api_call_record.dart` — `ApiCallRecord` + `ApiOperation`
+  enum (`append`/`update`/`delete`; only append is emitted today).
+  `repositories/i_audit_log.dart` — `IAuditLog {records(), clear(),
+  exportJson()}` (presentation goes through this, not the datasource).
+- **Data**: `models/api_call_record_model.dart` (JSON), `datasources/
+  audit_log_store.dart` (`implements IAuditLog`, key `audit.log.v1`,
+  newest-first, 500-cap tail-trim, corrupt JSON → empty).
+  `repositories/logging_sheets_repository.dart` — decorator over
+  `ISheetsRepository`; logs **appends only** (rows via `toRows`, a clean
+  summary, success/detail, httpStatus parsed from "Sheet returned NNN"); reads
+  pass through unlogged; a throwing store never breaks the append.
+- **Presentation**: `providers/audit_log_providers.dart` (`auditLogProvider`
+  typed as `IAuditLog`, `auditLogRecordsProvider` autoDispose so each visit
+  re-reads); `pages/history/history_page.dart` — newest-first list, tap →
+  detail with the exact row payloads, **Copy** (pretty JSON → clipboard) +
+  **Clear** (confirm) AppBar actions.
+
+### Decisions
+- **Two fixed slots, not a general manager** (user choice). Each slot's URL+key
+  is editable in-app; the Real slot is the migration target.
+- **Cache namespaced by slot id, and evicted on URL change** — prevents the old
+  sheet's rows flashing after a switch or after re-pointing a slot.
+- **Log via a decorator**, not inside the impl — keeps `SheetsRepositoryImpl`
+  clean and reads unlogged by construction. Mutations-only (reads are noisy
+  polls) per user.
+- **No new pub deps** — storage on `shared_preferences`, export via
+  `Clipboard`.
+
+### The 'Gravel' (this session)
+- **Real slot is empty until the user pastes its `/exec` URL + key** in
+  Settings → Real → Edit. An unconfigured active slot returns the existing
+  "not configured" Failure (no crash, no stale Test data).
+- **Cache/audit are keyed by slot id, not by URL.** Eviction-on-URL-change
+  covers the edit path; the audit log itself is not profile-namespaced (records
+  carry `sheetName`) — intentional.
+- **`update`/`delete` exist in `ApiOperation` but nothing emits them** (the app
+  only appends today).
+- Existing installs lose their one cached response on first launch after this
+  update (cache keys changed) — refetches immediately, harmless.
+- **Uncommitted**: all the new files above + edits to
+  `sheets_repository_impl.dart`, `sheets_local_cache.dart`,
+  `sheets_providers.dart`, `dashboard_page.dart`, and several test files.
+
+### Verification completed (2026-07-08)
+- ✅ Real sheet `/exec` URL configured and verified working end-to-end (transactions GET + dashboard grid both parse).
+- ✅ Dashboard/Transactions data refetch correctly when switching between Test ⇄ Real slots.
+- ✅ Each sheet's cached data + audit log stays independent (no cross-contamination).
+- ✅ All on-device flows working (Settings → switch, Settings → API call history).
+
+### Follow-ups from that milestone (still open)
+- Both sheets are live and working. The app is ready for daily use.
+- To add a third sheet later: the code models it generically (enum `SheetProfile.id`
+  currently 'test'/'real'); extend to three slots by adding an `otherId` const,
+  seeding it, and adding a third row in the Settings UI.
+- If the real sheet schema ever drifts from the test sheet (e.g. new columns,
+  rearranged tabs), check `docs/data/sheets.md` and `Code.gs` are in sync
+  before deploying.
+
+## Previous Milestone
+**Transfer value moved Price → Amount (2026-07-04, spec revision).** The
+user reversed the same-day "value in Price" spec: a directly entered
+Transfer now writes its value in the **Amount** column, as entered (no sign
+applied); Price stays blank. Analyzer clean, 41/41 tests. **Uncommitted.**
+
+### What shipped (Transfer column fix)
+- **Data** (`sheet_transaction_model.dart#toRows`): transfer branch writes
+  `tx.amount` at index 8, blank at index 7 (was the reverse).
+- **Form** (`add_transaction_sheet.dart`): the Transfer case maps the typed
+  value to the entity's `amount` field (was `price`).
+- **Negative Transfer amounts allowed (user request, same session)**: the
+  Transfer amount field now takes a signed value — formatter allows `-`,
+  keyboard is `signed: true`, and a new `_nonZeroNumber` validator replaces
+  `_positiveNumber` (rejects 0/empty/non-numeric, permits negatives). Value
+  is written to Amount **as entered**, so a minus means cash out. A hint line
+  under the field explains the sign. (Purchase/Buy/Sell still use
+  `_positiveNumber`.)
+- **Legacy read kept**: `SheetTransaction.computedAmount` still falls back to
+  Price for transfer rows with no Amount, so rows written under the earlier
+  same-day spec keep displaying correctly. New regression test covers this.
+- **Docs** (`docs/data/sheets.md`): Price/Amount column notes + direct
+  Transfer row-type section updated (legacy shape documented).
+- ⚠️ If any Price-column transfer rows exist in the live sheet, consider
+  moving those values to Amount by hand so the sheet's own formulas see them.
+
+## Previous Milestone
+**Account picker redesign (2026-07-04, earlier same day).** The stock Material
+`DropdownButtonFormField` in the add-transaction form is replaced with a
+custom bottom-sheet picker (Toss-style). Analyzer clean, 40/40 tests.
+**Uncommitted.**
+
+### What shipped (account picker)
+- **New**: `lib/presentation/widgets/account_picker_field.dart` —
+  `AccountPickerField` (trigger field, same filled/12px geometry as the other
+  inputs) + `_AccountPickerSheet` (modal bottom sheet) + `AccountMonogram`
+  (circular initial disc). Exports `newAccountSentinel` (moved out of
+  `add_transaction_sheet.dart`).
+- **Identity monograms**: each account gets a stable color from a 6-hue
+  cool-toned palette (`accountIdentityColor`, hash of the name). Red/amber
+  deliberately excluded — those are semantic (negative/warning) colors.
+- **MRU ordering + freshness captions**: `accountNamesProvider` (alphabetical
+  `List<String>`) replaced by `accountOptionsProvider` —
+  `List<AccountOption>` where `AccountOption = ({String name, DateTime
+  lastUsed})`, ordered most-recently-used first (rows arrive newest-first, so
+  first occurrence = MRU rank). Picker rows show "Used today / Used yesterday
+  / Last used Jun 12".
+- **Validation**: `AccountPickerField` wraps a `FormField<String>` with
+  `AutovalidateMode.onUserInteraction` — "Required" appears on save-validate
+  with a negative border, clears the moment a choice is made.
+- **"New account" flow REMOVED (user decision, same session)**: the app will
+  not offer creating accounts — accounts only ever come from the sheet. Gone:
+  `newAccountSentinel`, the picker's plus-disc action row, the inline
+  name field, `_resolveAccount` and the two `_new*AccountCtrl` controllers in
+  `add_transaction_sheet.dart` (`_accountSelector` inlined away — call sites
+  use `AccountPickerField` directly). An empty account list now shows a
+  "No accounts in the sheet yet" line in the picker. Both trade selectors get
+  titled sheets ("Brokerage cash account" / "Brokerage account").
+
+## Previous Milestone
+**Direct Transfer entry (2026-07-04, later same day).** Transfer is now a
+fourth option in the add-transaction form. **User spec**: writes ONE row —
+Date, Account, Type `Transfer`, Description, and the value in the **Price**
+column; Category/Symbol/Quantity/Amount stay blank. (Distinct from the
+trade-generated cash-leg Transfers, which keep using signed Amount.)
+Analyzer clean, 40/40 tests. Committed.
+
+### What shipped (Transfer entry)
+- **Domain**: `TransactionType.userSelectable` now includes `transfer`;
+  `SheetTransaction.computedAmount` returns `price ?? 0` for Transfer rows
+  with no Amount (so the price-only rows display correctly in the list —
+  read-back trade legs still use their signed Amount).
+- **Data**: `SheetTransactionModel.toRows` transfer branch (one row, value at
+  index 7 / Price, Amount blank).
+- **Form** (`add_transaction_sheet.dart`): `_transferFields` = Amount +
+  Description; save maps the form's Amount input to the entity's `price`
+  field (that is where the sheet wants it); the type toggle picks up the 4th
+  chip automatically via `userSelectable` (cyan, existing `_typeColor`).
+- **Docs**: `docs/data/sheets.md` — Price/Amount column notes + a "directly
+  entered Transfer" row-type section.
+- **Tests**: toRows shape + read-back computedAmount-from-Price (40 total).
+
+## Previous Milestone
+**Startup cache — no more empty loading screen (2026-07-04).** The last
+successful transactions + dashboard responses are now persisted on-device
+(`shared_preferences`) and rendered instantly on cold start while the live
+fetch revalidates in the background (stale-while-revalidate). Analyzer clean,
+30/30 tests pass. **This session's changes are uncommitted.**
+
+### What shipped this session (2026-07-04)
+- **New**: `lib/data/datasources/sheets_local_cache.dart` — stores the *raw
+  JSON response bodies* under `cache.transactions.body.v1` /
+  `cache.dashboard.body.v1`.
+- **Repository** (`sheets_repository_impl.dart`): parsing extracted into
+  `_parseTransactionsBody` / `_parseDashboardBody`, shared by the live fetch
+  and the new sync `cachedTransactions()` / `cachedDashboard()` (added to
+  `ISheetsRepository`). Cache is written only after a body parses
+  successfully; a corrupt/stale cached body reads back as null, never throws.
+- **Providers** (`sheets_providers.dart`): `transactionsProvider` and
+  `dashboardProvider` are now `StreamProvider`s — yield cached data first (if
+  any), then the live result. If the live fetch fails *and* cache was shown,
+  the error is swallowed (debugPrint only); with no cache it throws as before
+  so the ErrorCard still appears on true first-run failures. New
+  `sharedPreferencesProvider`, overridden in `main()` (prefs loaded before
+  `runApp` so cache reads are synchronous at first frame).
+- **Tests**: `test/data/repositories/sheets_repository_cache_test.dart` —
+  cache round-trip, failed-fetch-doesn't-overwrite, corrupt-body → null,
+  dashboard error payload not cached.
+- **"Could not load data at startup" hardening** (user report, same session).
+  User saw the error card on both pages at launch before live data arrived.
+  Verified via provider state-sequence tests that cache-present runs never
+  emit an error — so the on-device error means **empty cache + failed startup
+  fetch**. Three deterministic fixes:
+  1. `_get()` now also retries transient HTTP statuses (429/5xx — Apps Script
+     rejects concurrent cold-start bursts with these), not just transport
+     exceptions. Injected test clients still never retry.
+  2. `_cachedThenLive()` (new shared stream loop in `sheets_providers.dart`):
+     on a no-cache cold start, a failed fetch is retried once after 2s
+     (`_coldStartAttempts`/`_coldStartRetryDelay`) before the error surfaces.
+     Cache-present behavior unchanged (failure keeps cache, no retry).
+  3. Both pages: while a refetch is in flight after a previous error,
+     `async.isLoading` in the error branch shows the loading shimmer instead
+     of re-surfacing the stale error card (Riverpod's `skipLoadingOnRefresh`
+     otherwise re-shows the previous error during the whole reload).
+  New `test/presentation/providers/sheets_providers_test.dart` (scriptable
+  fake repo, records AsyncValue sequences; 38 tests total).
+- **"Updated Xm ago" freshness caption** (user request, same session): cache
+  now also stores a fetch timestamp (`cache.*.at.v1`, epoch ms) written
+  alongside each body; exposed via `cachedTransactionsAt()` /
+  `cachedDashboardAt()` on the repository, surfaced through
+  `transactionsUpdatedAtProvider` / `dashboardUpdatedAtProvider` (they watch
+  the data providers, so they re-read the moment live data lands). New shared
+  widget `lib/presentation/shared/widgets/updated_at_label.dart` renders a
+  tiny centered "Updated just now / 12m ago / 5h ago / Jul 1, 09:05" caption
+  at the top of both the Dashboard and Transactions lists; a private
+  minute-ticker StreamProvider keeps the relative label aging while the app
+  sits open. Hidden until the first-ever successful fetch. 34 tests total now
+  (label formatter + timestamp coverage added).
+
+## Previous Milestone
+**Buy/Sell two-row trade composition (2026-07-02, session 3).** Replaced the
+Buy/Sell placeholder with the real double-entry logic the user specced: every
+trade appends TWO rows — a `Transfer` cash leg on the first (cash) account and
+the `Buy`/`Sell` trade leg on the second (brokerage) account. Analyzer clean,
+17/17 tests pass. Committed as `2a8f223` (with session 2's work in earlier
+commits).
+
+### What shipped this session (2026-07-02, session 3)
+- **User-confirmed spec** (Sell is the exact mirror of Buy; revised same
+  session: **Sell quantity is written NEGATIVE**, so Amount is always plain
+  Quantity × Price):
+  | Row | Account | Type | Quantity | Amount (Buy) | Amount (Sell) |
+  | :-- | :-- | :-- | :-- | :-- | :-- |
+  | 1 cash leg | brokerage cash account | `Transfer` | blank | −qty×price | +qty×price |
+  | 2 trade leg | brokerage account | `Buy`/`Sell` | Buy +qty, Sell **−qty** | +qty×price | −qty×price |
+  Same Date + Description on both rows; both go in ONE POST (all-or-nothing).
+- **Domain**: `TransactionType.transfer` added (+ `userSelectable` const —
+  Transfer is never user-pickable, only generated). `SheetTransaction` gained
+  write-only `secondAccount`. `computedAmount` = amount ?? qty×price (plain
+  multiply — the sign lives in the Sell quantity). `summarize()`: netInvested
+  = Σ signed trade amounts; Transfer rows excluded from all aggregates.
+- **Data**: `_tradeRowsPlaceholder` → `_tradeRows` (composition above; the
+  form passes positive qty, the model negates for Sell; falls back to
+  `account` if `secondAccount` is null).
+- **Form** (`add_transaction_sheet.dart`): second dropdown for trades (each
+  with its own "+ New account…" entry) + a caption stating the two rows about
+  to be written. Trade labels renamed per user: **'Brokerage cash account'**
+  (was Account) and **'Brokerage account'** (was Second account); Purchase
+  keeps plain 'Account'. Type toggle iterates `userSelectable`.
+- **List** (`sheet_view_page.dart`): Transfer rows render with swap icon,
+  cyan `secondaryFallback` color, description-or-'Transfer' title.
+- **Expense Amounts are stored NEGATIVE** (user spec, cash-out convention):
+  model negates the form's positive input on write; `summarize()` reports
+  spending as the positive magnitude (−Σ expense amounts). ⚠️ Any legacy
+  expense rows with POSITIVE Amounts would now *subtract* from the spending
+  stat — glance at the live sheet if Spending looks low.
+- **Purchase finalized (user spec)**: writes ONE row with Type **`Expense`**
+  (not `Purchase` — reading stays lenient to both). Category enum replaced
+  with the sheet's real 12 values: `Monthly, 교통, 식비, 생필품, 의류, Fun,
+  배달음식, Misc., Work, 경조사, 웨딩, 여행` — `sheetValue` is both wire value
+  and display label; parsing matches wire value case-insensitively or legacy
+  enum name, unknown → `Misc.`. `TransactionCategory.other` → `misc`
+  everywhere; model writes `category.sheetValue` (was `.name`); new
+  icons/colors per category in `transaction_category_ui.dart`.
+- **Ordering + date fixes** (user reported "order seems weird"):
+  1. `SheetTransaction.rowIndex` (sheet position) + `newestFirst` comparator —
+     Dart's sort is unstable, so same-timestamp rows (same-day entries, trade
+     leg pairs) used to shuffle randomly; now they tiebreak by sheet position,
+     later rows first. Used in both the repository sort and `groupByMonth`.
+  2. `_parseDate` now `.toLocal()`s — Apps Script serializes date cells as UTC
+     (`2026-02-01` KST → `"2026-01-31T15:00:00.000Z"`), which shifted displayed
+     dates back a day and could group rows under the wrong month header.
+- **Success toast on save** (user request): after a successful append the form
+  shows "Sheet updated — Purchase added" / "… Buy added (2 rows)" / "… Sell
+  added (2 rows)" via the root ScaffoldMessenger (survives the sheet pop),
+  then closes.
+- **Summary header is now CURRENT-MONTH, not all-time** (user request):
+  "This month · July 2026" caption, Spending + Net invested stats and the
+  category breakdown all come from `currentMonthSummaryProvider`
+  (replaces `transactionSummaryProvider`), which filters via the new domain
+  helper `TransactionAggregates.inMonth(year, month)` before `summarize()`.
+  New domain test file `test/domain/entities/transaction_summary_test.dart`
+  (19 tests total now).
+- **Docs**: `docs/data/sheets.md` row-types + Quantity/Amount columns now
+  document the signed two-row contract.
+
+### Previously shipped (2026-07-02, session 2)
+- **Dashboard all-zeros diagnosed: the deployed `/exec` Apps Script is an OLD
+  version without `?sheet=` support.** Verified via curl:
+  `GET ...?apiKey=...&sheet=DashboardDB1` returns the transactions
+  `{"rows": [...]}` payload, not `{"grid": [...]}` — the deployment predates
+  commit `c3cef27`. The app parsed the missing `grid` as an empty grid, so every
+  label-anchored lookup fell back to 0.
+  - **Client fix** in `sheets_repository_impl.dart#fetchDashboard`: a response
+    without a `grid` list is now a `Failure` with a redeploy hint, so the UI
+    shows an ErrorCard instead of silently rendering zeros.
+  - **Real fix is user-side**: open the Apps Script project → Deploy → Manage
+    deployments → Edit → **New version** → Deploy (same URL stays valid).
+    `docs/apps_script/Code.gs` already has the `?sheet=` code — it just was
+    never published.
+- **Launcher icon artwork enlarged.** The trend-line glyph occupied only ~21% of
+  the 1024² canvas. Regenerated with Pillow:
+  - `icon_foreground.png`: glyph scaled **2.1×** (~45% of canvas — the max that
+    keeps its half-diagonal, 291px, inside the 313px adaptive-icon safe-zone
+    circle radius).
+  - `icon.png`: rebuilt as **full-bleed opaque** (background color + glyph at
+    2.7× ≈ 57%). The old file had baked-in transparent rounded corners, which
+    iOS would have rendered as black; the OS masks corners itself.
+  - Ran `dart run flutter_launcher_icons` — all Android mipmaps + iOS appiconset
+    regenerated.
+- **Tab order swapped** in `main.dart`: `_pages = [DashboardPage(), SheetViewPage()]`,
+  nav items reordered — Dashboard is now index 0 (left), Transactions index 1.
+
+### Previously shipped (2026-07-02, session 1)
+- **Fixed `ClientException: software caused connection abort`**: `DashboardDB1`
+  read takes ~10–13s (live formulas), old 15s timeout tore the socket down.
+  `_timeout` 15s → 30s; `_get()` retries idempotent GETs once; POST never
+  retried. Commit `05d92ce`.
+- **Launcher icon wired up** (`flutter_launcher_icons ^0.14.3`, sources in
+  `assets/icon/`). Commit `bf7f079`.
+
+### Previously shipped (2026-07-01) — Dashboard page
+- `AppConfig.sheetsWebAppUrl` updated to new `/exec`, `sheetsApiKey =
+  'jibsaja-secret-2024-xk9m'` (matches `API_KEY` in `Code.gs`).
+- **`DashboardDB1` is the data source — nothing computed client-side.** Files:
+  `domain/entities/dashboard_summary.dart`,
+  `data/models/dashboard_summary_model.dart` (label-anchored `fromGrid`),
+  `presentation/pages/dashboard/dashboard_page.dart`, `fx_sparkline.dart`
+  (CustomPaint, no charting dep), plus `fetchDashboard()` through repo/provider.
+
+## Context & Logic Decisions
+- **Cache stores raw response bodies, not serialized entities.** Entities have
+  no `toJson`; caching the body means one parser for live + cached data, and a
+  future schema change degrades to "no cache" instead of a migration.
+- **StreamProvider over AsyncNotifier for cache-first emit.** A `FutureProvider`
+  can only resolve once; `async*` yields cached-then-live naturally, and
+  `AsyncValue.when`'s default `skipLoadingOnRefresh` keeps pull-to-refresh
+  behavior identical.
+- **Failed refresh keeps stale data silently (when cache exists).** Rationale:
+  stale numbers beat an error card for a glance-first app; the error still
+  surfaces when there is nothing cached. The "Updated Xm ago" caption is the
+  staleness signal — after a failed silent refresh it honestly keeps aging.
+- **Freshness = cache write time, not a separate clock.** The timestamp is
+  written in the same `write*` call as the body, so "Updated X ago" is by
+  construction the age of the data on screen — including the offline case.
+- **Parse by label-anchor, not fixed cells.** `DashboardSummaryModel.fromGrid`
+  finds each Korean label cell and reads the cell(s) to its right (dual-currency
+  totals: USD at +1, KRW at +2). Survives row/column inserts in the sheet.
+- **Missing `grid` is a hard Failure, not an empty dashboard.** All-zeros KPIs
+  are worse than an error card: they look like real data. Same philosophy as the
+  existing `{"error": ...}` → `Failure` handling; `fetchTransactions` keeps its
+  lenient missing-`rows` → empty-list behavior.
+- **Adaptive-icon glyph sizing is geometry-bound.** Foreground content must fit
+  the 66/108 safe-zone circle (radius ≈ 313px on a 1024 canvas); 2.1× was chosen
+  from the measured glyph bbox (217×172, centered), not eyeballed.
+- **`총 자산` = cash + stocks only.** Crypto (업비트/빗썸) and card debt live in
+  the `Accounts` tab, NOT in `DashboardDB1` totals. Extend later via
+  `?sheet=Accounts`.
+- **Nav.** `HomeShell` + `IndexedStack` preserves tab state; custom bottom bar
+  because the theme leaves `NavigationBar` transparent. Still no router.
+
+### Dashboard-zeros RESOLVED (same day, later in session)
+The user's redeploy had created a **new deployment with a new URL**
+(`.../AKfycbz2BnfyQnx9.../exec`); the old URL stayed pinned to old code forever.
+`app_config.dart` (gitignored) now points at the new URL. Verified end-to-end:
+`?sheet=DashboardDB1` returns the grid, transactions GET works, and
+`DashboardSummaryModel.fromGrid` run against the live grid resolves **every**
+KPI (e.g. totalAssetsKrw ≈ ₩270.6M, returnRate ≈ +25.9%, 179 FX points).
+Bonus: the new deployment answers in ~2.6s vs the old ~13s.
+
+## The 'Gravel'
+- **Account picker has no search field** — fine for a personal handful of
+  accounts; add a filter box in `_AccountPickerSheet` if the list ever grows
+  past a screenful (it caps at 60% screen height and scrolls).
+- **The freshness label only ticks per minute** and the empty-transactions
+  state (`_EmptyState`) doesn't show it — both fine, just deliberate.
+- **Cache is unbounded**: the full transactions body is one prefs string; fine
+  for years of personal data, but SharedPreferences loads it all into memory.
+  Switch to a file (path_provider) if the sheet ever gets huge.
+- **The OLD Apps Script deployment (`AKfycbz4_GJUe...`) is still active** and
+  serves stale code. Nothing points at it anymore, but archive it in
+  Deploy → Manage deployments to avoid future confusion.
+- **Session's changes are uncommitted** (icon assets + generated mipmaps/appiconset,
+  `main.dart`, `sheets_repository_impl.dart`, `HANDOVER.md`, `pubspec.lock` was
+  already dirty before the session).
+- **The 30s timeout may now be overly generous** — the new deployment answers
+  the DashboardDB1 read in ~2.6s (old one took ~10–13s). Harmless as-is; could
+  be tightened once on-device behavior is confirmed.
+- **One glitch cell in DashboardDB1**: a `Close` cell serialises as a bogus
+  `1904-01-03T...` date; the FX parser skips non-numeric cells (series can be 1
+  point short).
+- **`currency_formatter.dart` still fully unused** — delete if it stays unused.
+- Sparkline stays deliberately minimal (straight segments, no axis labels).
+- **Sign convention & existing sheet rows**: `netInvested` now assumes Sell
+  amounts are stored NEGATIVE (the user's convention). If any pre-existing
+  manual Sell rows have positive Amounts, Net invested will read high — worth a
+  glance at the live sheet.
+- The two-row hint caption under "Brokerage account" uses literal wording
+  ("Writes 2 rows: …"); tweak copy if it feels un-minimalist.
+- Read-back Sell rows show the stored negative quantity in the list subtitle
+  ("−10 @ 150") — honest to the sheet, but could display abs(qty) if the user
+  prefers.
+
+## Next Immediate Step
+1. **Verify the account picker on-device**: open Add Transaction → tap
+   Account → picker sheet should list accounts MRU-first with monograms;
+   pick one, and save-validate empty (inline "Required"). No New-account
+   option should appear anywhere. Then commit (`account_picker_field.dart`,
+   `add_transaction_sheet.dart`, `sheets_providers.dart`, `HANDOVER.md`).
+2. **Verify Transfer on-device**: add a Transfer in the app, then check the
+   sheet row has the value in the **Amount** column (spec revised — was
+   Price) and that the sheet's own balance formulas pick it up. Also decide
+   whether to hand-migrate any old Price-column transfer rows.
+2. **Verify on-device that the startup error is gone**: fresh install (or
+   clear app data) + launch → should shimmer, retry silently if the first
+   fetch hiccups, and only error if the network is truly down. Then relaunch —
+   cached data should paint instantly with the "Updated …" caption. If the
+   error card still appears, **the small text under "Could not load data" is
+   the actual exception — capture it**, it pinpoints the remaining cause.
+2. Commit this session's work (`pubspec.yaml`, `pubspec.lock`, `main.dart`,
+   `sheets_local_cache.dart`, `i_sheets_repository.dart`,
+   `sheets_repository_impl.dart`, `sheets_providers.dart`,
+   `updated_at_label.dart`, both pages, new test files, `HANDOVER.md`). Optional backlog: `git push`, Accounts-tab crypto/debt,
+   delete unused `currency_formatter.dart`, archive the old Apps Script
+   deployment, verify Buy/Sell on-device (carried over from session 3).
