@@ -2,5 +2,46 @@
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | { read -r f; echo \"$f\" | grep -q '\\.dart$' && dart format \"$f\"; } 2>/dev/null || true",
+            "statusMessage": "Formatting Dart file..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | { read -r f; echo \"$f\" | grep -q 'pubspec\\.yaml$' && (cd \"$(dirname \"$f\")\" && flutter pub get); } 2>/dev/null || true",
+            "statusMessage": "Running flutter pub get..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | { read -r f; echo \"$f\" | grep -qE '\\.dart$' && ! echo \"$f\" | grep -qE '\\.(g|freezed)\\.dart$' && { output=$(flutter analyze \"$f\" 2>&1); echo \"$output\" | grep -qE 'error|warning|info' && printf '%s' \"$output\" | jq -Rs '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":(\"flutter analyze found issues in edited file:\\n\" + .)}}' || true; }; } 2>/dev/null || true",
+            "statusMessage": "Running flutter analyze..."
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git remote:*)"
+    ]
   }
 }
