@@ -1,0 +1,749 @@
+<title>Transaction Row Studies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Roboto:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0&icon_names=arrow_downward,card_giftcard,celebration,checkroom,delivery_dining,directions_car,event_repeat,favorite,flight,help,more_horiz,restaurant,shopping_basket,swap_horiz,trending_down,trending_up,work">
+
+<style>
+/* ============================================================
+   Page chrome — deliberately monochrome graphite.
+   Every chromatic pixel on this page belongs to a mockup, so
+   the app's 12 category hues are never judged against a
+   competing accent.
+   ============================================================ */
+:root {
+  --bg:      #E9EAEE;
+  --panel:   #FCFCFD;
+  --sunk:    #DFE1E7;
+  --ink:     #16171C;
+  --ink-2:   #575A64;
+  --ink-3:   #8B8E99;
+  --rule:    #D0D2DA;
+  --rule-2:  #BEC1CB;
+  --shadow:  0 1px 2px rgba(20,22,30,.05), 0 8px 24px -12px rgba(20,22,30,.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:     #0F1014;
+    --panel:  #181A20;
+    --sunk:   #131419;
+    --ink:    #ECEDF1;
+    --ink-2:  #9CA0AB;
+    --ink-3:  #6A6E79;
+    --rule:   #272A32;
+    --rule-2: #343843;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:     #0F1014;
+  --panel:  #181A20;
+  --sunk:   #131419;
+  --ink:    #ECEDF1;
+  --ink-2:  #9CA0AB;
+  --ink-3:  #6A6E79;
+  --rule:   #272A32;
+  --rule-2: #343843;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+h1, h2, h3 {
+  font-family: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
+  font-weight: 700;
+  text-wrap: balance;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.eyebrow {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+code, .mono {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: .86em;
+}
+code { color: var(--ink-2); }
+
+/* ---------- masthead ---------- */
+.masthead { padding: 72px 0 40px; }
+.masthead h1 { font-size: clamp(34px, 5.4vw, 56px); line-height: 1.02; max-width: 15ch; }
+.masthead .lede {
+  margin: 20px 0 0;
+  max-width: 62ch;
+  font-size: 17px;
+  color: var(--ink-2);
+}
+.masthead .eyebrow { margin-bottom: 14px; }
+
+/* ---------- sticky index ---------- */
+.index {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 56px;
+}
+.index ol {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; gap: 4px; overflow-x: auto;
+  scrollbar-width: thin;
+}
+.index a {
+  display: block; padding: 12px 14px;
+  font-size: 13px; font-weight: 500; white-space: nowrap;
+  color: var(--ink-2); text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.index a:hover, .index a:focus-visible { color: var(--ink); border-bottom-color: var(--rule-2); }
+.index a .num {
+  font-family: "IBM Plex Mono", monospace; font-size: 11px;
+  color: var(--ink-3); margin-right: 7px;
+}
+
+/* ---------- study block ---------- */
+.study { padding-bottom: 76px; }
+.study + .study { border-top: 1px solid var(--rule); padding-top: 56px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr;
+  gap: 40px;
+  align-items: start;
+}
+.spec { position: sticky; top: 78px; }
+.spec h2 { font-size: 25px; line-height: 1.15; margin-bottom: 4px; }
+.spec .num {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px; font-weight: 500; color: var(--ink-3);
+  display: block; margin-bottom: 10px;
+}
+.spec p { margin: 14px 0 0; font-size: 14.5px; color: var(--ink-2); }
+
+.facts { margin: 22px 0 0; border-top: 1px solid var(--rule); }
+.facts div {
+  display: grid; grid-template-columns: 74px 1fr; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--rule);
+  font-size: 13px; line-height: 1.45;
+}
+.facts dt {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-3); margin: 2px 0 0;
+}
+.facts dd { margin: 0; color: var(--ink-2); }
+.facts dd strong { color: var(--ink); font-weight: 600; }
+
+/* ---------- phone frames ---------- */
+.frames { display: flex; gap: 22px; flex-wrap: wrap; }
+.frame-col { flex: 1 1 300px; min-width: 280px; max-width: 372px; }
+.frame-label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-3); margin-bottom: 9px; display: flex; gap: 8px; align-items: center;
+}
+.frame-label::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+
+.frame {
+  border-radius: 26px;
+  padding: 9px;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow);
+}
+.screen {
+  border-radius: 18px;
+  padding: 12px;
+  overflow: hidden;
+  font-family: Roboto, "Noto Sans KR", system-ui, sans-serif;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.screen.light { background: #F8F9FB; }
+.screen.dark  { background: #080D1A; }
+
+/* ============================================================
+   Mockup internals. Two token sets, one per app theme; every
+   value is copied from app_colors.dart.
+   ============================================================ */
+.screen.light { --card:#FFFFFF; --bd:#C2C6D8; --t1:#191C1E; --t2:#424656; --t3:#737687; }
+.screen.dark  { --card:#131D30; --bd:#1E2D47; --t1:#F1F5F9; --t2:#94A3B8; --t3:#4B5E7A; }
+
+.ms {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal; font-style: normal;
+  line-height: 1; letter-spacing: normal; text-transform: none;
+  display: inline-block; white-space: nowrap; direction: ltr;
+  -webkit-font-feature-settings: 'liga'; font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 1;
+}
+
+/* shared row scaffolding */
+.row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: .5px solid var(--bd);
+  border-radius: 14px;
+}
+.row .body { flex: 1; min-width: 0; }
+.row .title {
+  font-size: 14px; font-weight: 600; color: var(--t1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row .sub {
+  font-size: 12px; color: var(--t2); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row .right { text-align: right; flex-shrink: 0; }
+.row .amt {
+  font-size: 14px; font-weight: 700; color: var(--t1);
+  font-variant-numeric: tabular-nums;
+}
+.row .type { font-size: 11px; font-weight: 600; margin-top: 2px; color: var(--c); }
+.row .type.muted { color: var(--t3); }
+
+.tile {
+  width: 40px; height: 40px; flex-shrink: 0;
+  border-radius: 10px;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+}
+.tile .ms { font-size: 20px; color: var(--c); }
+
+/* 01 — inline chip */
+.d1 .sub { display: flex; align-items: center; gap: 6px; }
+.d1 .chip {
+  flex-shrink: 0;
+  font-size: 11px; font-weight: 700; line-height: 1;
+  padding: 4px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+  color: var(--c);
+}
+.d1 .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 02 — accent rail + label swap */
+.d2 { position: relative; padding-left: 16px; overflow: hidden; }
+.d2::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; background: var(--c);
+}
+.d2 .glyph { flex-shrink: 0; width: 26px; text-align: center; }
+.d2 .glyph .ms { font-size: 22px; color: var(--c); }
+.d2 .title { color: var(--c); }
+.d2 .sub .desc { color: var(--t1); font-weight: 500; }
+
+/* 03 — solid icon + caption */
+.d3 .stack { width: 52px; flex-shrink: 0; text-align: center; }
+.d3 .tile {
+  width: 40px; height: 40px; margin: 0 auto;
+  background: var(--c);
+  box-shadow: 0 2px 6px -1px color-mix(in srgb, var(--c) 45%, transparent);
+}
+.d3 .tile .ms { color: #fff; }
+.screen.dark .d3 .tile .ms { color: #0B1120; }
+.d3 .cap {
+  margin-top: 5px; font-size: 9.5px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase;
+  color: var(--c);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* 04 — category sections */
+.sect { display: flex; flex-direction: column; gap: 6px; }
+.sect + .sect { margin-top: 14px; }
+.sect-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 4px 6px;
+  border-bottom: 1px solid var(--bd);
+}
+.sect-head .dot {
+  width: 9px; height: 9px; border-radius: 3px; background: var(--c); flex-shrink: 0;
+}
+.sect-head .name { font-size: 12.5px; font-weight: 700; color: var(--c); letter-spacing: .01em; }
+.sect-head .count {
+  font-size: 10.5px; font-weight: 600; color: var(--t3);
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+  border-radius: 999px; padding: 1px 6px;
+}
+.sect-head .sum {
+  margin-left: auto; font-size: 12px; font-weight: 700; color: var(--t2);
+  font-variant-numeric: tabular-nums;
+}
+.d4 { padding: 9px 12px; border-radius: 11px; }
+.d4 .title { font-weight: 500; }
+
+/* 05 — tinted row card */
+.d5 {
+  background: color-mix(in srgb, var(--c) 9%, var(--card));
+  border-color: color-mix(in srgb, var(--c) 22%, transparent);
+  border-left: 3px solid var(--c);
+  padding-left: 12px;
+}
+.d5 .kicker {
+  font-size: 10px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--c); margin-bottom: 1px;
+}
+.d5 .tile { background: color-mix(in srgb, var(--c) 20%, transparent); }
+
+/* ---------- comparison table ---------- */
+.compare { border-top: 1px solid var(--rule); padding: 56px 0 40px; }
+.tablewrap { overflow-x: auto; margin-top: 26px; }
+table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 13.5px; }
+th, td { text-align: left; padding: 13px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+thead th {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 500;
+  border-bottom: 1px solid var(--rule-2);
+}
+tbody th { font-weight: 600; color: var(--ink); white-space: nowrap; }
+tbody th .n { font-family: "IBM Plex Mono", monospace; color: var(--ink-3); font-size: 11px; margin-right: 6px; }
+td { color: var(--ink-2); }
+.mark { font-weight: 700; color: var(--ink); }
+
+/* ---------- notes ---------- */
+.notes { padding-bottom: 90px; }
+.notes h2 { font-size: 22px; margin-bottom: 8px; }
+.notecards {
+  display: grid; gap: 16px; margin-top: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+}
+.note {
+  background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 12px; padding: 18px 18px 20px;
+}
+.note h3 { font-size: 15px; margin-bottom: 6px; letter-spacing: -0.01em; }
+.note p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+
+footer {
+  border-top: 1px solid var(--rule);
+  padding: 26px 0 60px;
+  font-size: 12.5px; color: var(--ink-3);
+}
+
+a:focus-visible, .index a:focus-visible {
+  outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px;
+}
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: 1fr; gap: 26px; }
+  .spec { position: static; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+}
+html { scroll-behavior: smooth; }
+</style>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Jibsaja · Transactions tab</p>
+    <h1>Five ways to make a row say what it is</h1>
+    <p class="lede">
+      Today a row's category is carried entirely by hue and glyph — the words
+      <em>식비</em>, <em>배달음식</em>, <em>교통</em> are never drawn on screen. Twelve categories
+      map to twelve hues, so telling one from another means recognising a colour from memory.
+      Below: the row as it ships now, then five designs that put the category back into words.
+      Every design renders the same eleven rows, in both app themes, in the app's real palette.
+    </p>
+  </div>
+</header>
+
+<nav class="index" aria-label="Designs">
+  <div class="wrap">
+    <ol>
+      <li><a href="#today"><span class="num">00</span>As it ships</a></li>
+      <li><a href="#d1"><span class="num">01</span>Inline chip</a></li>
+      <li><a href="#d2"><span class="num">02</span>Accent rail</a></li>
+      <li><a href="#d3"><span class="num">03</span>Solid icon</a></li>
+      <li><a href="#d4"><span class="num">04</span>Category sections</a></li>
+      <li><a href="#d5"><span class="num">05</span>Tinted card</a></li>
+      <li><a href="#compare"><span class="num">··</span>Side by side</a></li>
+    </ol>
+  </div>
+</nav>
+
+<main class="wrap" id="studies"></main>
+
+<section class="compare wrap" id="compare">
+  <p class="eyebrow">Side by side</p>
+  <h2>What each design buys you</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Design</th>
+          <th scope="col">Category legible without colour</th>
+          <th scope="col">Row height</th>
+          <th scope="col">Colour load</th>
+          <th scope="col">Keeps date order</th>
+          <th scope="col">Code touched</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row"><span class="n">01</span>Inline chip</th>
+          <td><span class="mark">Yes</span> — label sits in the subtitle</td>
+          <td>Unchanged</td>
+          <td>Low — one tinted pill</td>
+          <td>Yes</td>
+          <td><code>transaction_tile.dart</code> only, ~20 lines</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">02</span>Accent rail</th>
+          <td><span class="mark">Yes</span> — category is the headline</td>
+          <td>Unchanged</td>
+          <td>Medium — 4px rail per row</td>
+          <td>Yes</td>
+          <td><code>transaction_tile.dart</code> only, ~30 lines</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">03</span>Solid icon</th>
+          <td><span class="mark">Yes</span> — caption under the icon</td>
+          <td>+6px (caption)</td>
+          <td>High — solid fills</td>
+          <td>Yes</td>
+          <td><code>transaction_tile.dart</code> only, ~25 lines</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">04</span>Category sections</th>
+          <td><span class="mark">Yes</span> — header per group</td>
+          <td>−8px per row, +30px per group</td>
+          <td>Low — colour only in headers</td>
+          <td><span class="mark">No</span> — regrouped</td>
+          <td>Tile <em>and</em> <code>sheet_view_page.dart</code> grouping</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">05</span>Tinted card</th>
+          <td><span class="mark">Yes</span> — kicker above the title</td>
+          <td>+4px</td>
+          <td>Highest — whole card tints</td>
+          <td>Yes</td>
+          <td><code>transaction_tile.dart</code> only, ~25 lines</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="notes wrap">
+  <p class="eyebrow">Worth knowing before you pick</p>
+  <h2>Three things these mockups exposed</h2>
+  <div class="notecards">
+    <div class="note">
+      <h3>Type colours have no dark variant</h3>
+      <p>
+        The twelve category hues ship as light/dark pairs, but the five <em>type</em> colours in
+        <code>_typeColor</code> are single constants. Buy uses <code>primary</code> #0055B2 and Deposit
+        uses <code>positive</code> #059669 — both sit dark on the #131D30 card. Look at the Buy and
+        Deposit rows in the dark column: they read dimmer than every expense. Worth fixing whichever
+        design wins.
+      </p>
+    </div>
+    <div class="note">
+      <h3>Non-expense rows have no category</h3>
+      <p>
+        Only <code>Expense</code> rows carry a Category column, so Buy, Sell, Transfer, Deposit and
+        unrecognised rows fill the same slot with their <em>type</em>. Every design above does this,
+        which is what finally makes deposits and transfers scannable — today they're a badge in
+        11px type at the far right edge.
+      </p>
+    </div>
+    <div class="note">
+      <h3>Amount sign is a separate fix</h3>
+      <p>
+        Amounts render in plain primary text in all six designs, exactly as they do today — money
+        in and money out look identical. Colouring the sign (green in, neutral out) is orthogonal
+        to the category question and can be added on top of whichever design you pick.
+      </p>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap">
+  Palette from <code>app_colors.dart</code> and <code>transaction_category_ui.dart</code>; row
+  semantics and amount signs from <code>docs/data/sheets.md</code>. Rendered with Material Symbols
+  Rounded, the same glyph set Flutter draws.
+</footer>
+
+<script>
+/* ---------- data ---------------------------------------------------------
+   Twelve category hues live in transaction_category_ui.dart as light/dark
+   pairs; the five type colours live in _typeColor as single constants.
+   ------------------------------------------------------------------------ */
+const CATS = {
+  food:      { label: '식비',     icon: 'restaurant',      l: '#EA580C', d: '#FB923C' },
+  delivery:  { label: '배달음식', icon: 'delivery_dining', l: '#CA8A04', d: '#FACC15' },
+  transport: { label: '교통',     icon: 'directions_car',  l: '#0284C7', d: '#38BDF8' },
+  monthly:   { label: 'Monthly',  icon: 'event_repeat',    l: '#4F46E5', d: '#818CF8' },
+  travel:    { label: '여행',     icon: 'flight',          l: '#0D9488', d: '#2DD4BF' },
+};
+const TYPES = {
+  deposit:  { label: 'Deposit',  icon: 'arrow_downward', l: '#059669', d: '#059669' },
+  buy:      { label: 'Buy',      icon: 'trending_up',    l: '#0055B2', d: '#0055B2' },
+  sell:     { label: 'Sell',     icon: 'trending_down',  l: '#F59E0B', d: '#F59E0B' },
+  transfer: { label: 'Transfer', icon: 'swap_horiz',     l: '#0891B2', d: '#0891B2' },
+  dividend: { label: 'Dividend', icon: 'help',           l: '#737687', d: '#737687' },
+};
+
+const ROWS = [
+  { cat: 'food',      title: '점심 김밥천국',  account: '신한카드',       date: 'Aug 24, 2026', amount: '-₩12,000' },
+  { cat: 'delivery',  title: '쿠팡이츠 저녁',  account: '신한카드',       date: 'Aug 24, 2026', amount: '-₩23,500' },
+  { cat: 'food',      title: '스타벅스 아메리카노', account: '신한카드',       date: 'Aug 23, 2026', amount: '-₩6,800' },
+  { cat: 'transport', title: 'Uber to SFO',    account: 'Chase',          date: 'Aug 22, 2026', amount: '-$38.40' },
+  { cat: 'monthly',   title: 'Netflix',        account: 'Chase',          date: 'Aug 21, 2026', amount: '-$15.49' },
+  { cat: 'travel',    title: 'Hotel Osaka',    account: 'Chase',          date: 'Aug 21, 2026', amount: '-$212.00' },
+  { type: 'deposit',  title: 'Paycheck',       account: 'BoA',            date: 'Aug 20, 2026', amount: '+$3,250.00' },
+  { type: 'buy',      title: 'AAPL',           account: 'Robinhood',      date: 'Aug 19, 2026', amount: '$2,274.00', meta: '10 @ 227.4' },
+  { type: 'transfer', title: 'Buy AAPL',       account: 'Robinhood Cash', date: 'Aug 19, 2026', amount: '-$2,274.00' },
+  { type: 'sell',     title: 'NVDA',           account: 'Robinhood',      date: 'Aug 18, 2026', amount: '-$472.80',  meta: '-4 @ 118.2' },
+  { type: 'dividend', title: 'AAPL dividend',  account: 'Robinhood',      date: 'Aug 17, 2026', amount: '$8.10' },
+];
+
+/* Resolve a row to { label, icon, color } for the given theme. Expense rows
+   resolve to their category; everything else to its type — the sheet gives
+   non-expense rows no Category at all. */
+function facet(r, dark) {
+  const src = r.cat ? CATS[r.cat] : TYPES[r.type];
+  return { label: src.label, icon: src.icon, color: dark ? src.d : src.l };
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+const sub = (r) => [r.account, r.date, r.meta].filter(Boolean).map(esc).join(' · ');
+const icon = (name) => `<span class="ms">${name}</span>`;
+
+/* ---------- renderers, one per design ---------------------------------- */
+
+// 00 — as it ships: colour and glyph only, type label at far right.
+function today(r, dark) {
+  const f = facet(r, dark);
+  return `<div class="row" style="--c:${f.color}">
+    <div class="tile">${icon(f.icon)}</div>
+    <div class="body">
+      <div class="title">${esc(r.title)}</div>
+      <div class="sub">${sub(r)}</div>
+    </div>
+    <div class="right">
+      <div class="amt">${esc(r.amount)}</div>
+      <div class="type">${esc(r.type ? TYPES[r.type].label : 'Purchase')}</div>
+    </div>
+  </div>`;
+}
+
+// 01 — inline chip: label moves into the subtitle as a tinted pill.
+function d1(r, dark) {
+  const f = facet(r, dark);
+  return `<div class="row d1" style="--c:${f.color}">
+    <div class="tile">${icon(f.icon)}</div>
+    <div class="body">
+      <div class="title">${esc(r.title)}</div>
+      <div class="sub"><span class="chip">${esc(f.label)}</span><span class="meta">${sub(r)}</span></div>
+    </div>
+    <div class="right"><div class="amt">${esc(r.amount)}</div></div>
+  </div>`;
+}
+
+// 02 — accent rail: category becomes the headline, description demoted.
+function d2(r, dark) {
+  const f = facet(r, dark);
+  return `<div class="row d2" style="--c:${f.color}">
+    <div class="glyph">${icon(f.icon)}</div>
+    <div class="body">
+      <div class="title">${esc(f.label)}</div>
+      <div class="sub"><span class="desc">${esc(r.title)}</span> · ${sub(r)}</div>
+    </div>
+    <div class="right"><div class="amt">${esc(r.amount)}</div></div>
+  </div>`;
+}
+
+// 03 — solid icon with a caption underneath; text block untouched.
+function d3(r, dark) {
+  const f = facet(r, dark);
+  return `<div class="row d3" style="--c:${f.color}">
+    <div class="stack">
+      <div class="tile">${icon(f.icon)}</div>
+      <div class="cap">${esc(f.label)}</div>
+    </div>
+    <div class="body">
+      <div class="title">${esc(r.title)}</div>
+      <div class="sub">${sub(r)}</div>
+    </div>
+    <div class="right"><div class="amt">${esc(r.amount)}</div></div>
+  </div>`;
+}
+
+// 04 — sections: rows regrouped under a header carrying count and subtotal.
+function d4list(dark) {
+  const groups = [];
+  for (const r of ROWS) {
+    const key = r.cat || r.type;
+    let g = groups.find(x => x.key === key);
+    if (!g) groups.push(g = { key, rows: [] });
+    g.rows.push(r);
+  }
+  return groups.map(g => {
+    const f = facet(g.rows[0], dark);
+    const total = subtotal(g.rows);
+    const body = g.rows.map(r => `<div class="row d4">
+      <div class="body">
+        <div class="title">${esc(r.title)}</div>
+        <div class="sub">${sub(r)}</div>
+      </div>
+      <div class="right"><div class="amt">${esc(r.amount)}</div></div>
+    </div>`).join('');
+    return `<div class="sect" style="--c:${f.color}">
+      <div class="sect-head">
+        <span class="dot"></span>
+        <span class="name">${esc(f.label)}</span>
+        <span class="count">${g.rows.length}</span>
+        <span class="sum">${esc(total)}</span>
+      </div>${body}
+    </div>`;
+  }).join('');
+}
+
+/* Section subtotals only add up when a group shares one currency; mixed
+   groups show the count instead of a wrong number. */
+function subtotal(rows) {
+  if (rows.length === 1) return rows[0].amount;
+  const sym = rows[0].amount.replace(/[-+\d.,]/g, '');
+  if (rows.some(r => r.amount.replace(/[-+\d.,]/g, '') !== sym)) return '—';
+  const n = rows.reduce((a, r) => a + Number(r.amount.replace(/[^-\d.]/g, '')), 0);
+  const abs = Math.abs(n).toLocaleString('en-US', {
+    minimumFractionDigits: sym === '₩' ? 0 : 2,
+    maximumFractionDigits: sym === '₩' ? 0 : 2,
+  });
+  return `${n < 0 ? '-' : ''}${sym}${abs}`;
+}
+
+// 05 — tinted card: whole surface takes the hue, kicker above the title.
+function d5(r, dark) {
+  const f = facet(r, dark);
+  return `<div class="row d5" style="--c:${f.color}">
+    <div class="tile">${icon(f.icon)}</div>
+    <div class="body">
+      <div class="kicker">${esc(f.label)}</div>
+      <div class="title">${esc(r.title)}</div>
+      <div class="sub">${sub(r)}</div>
+    </div>
+    <div class="right">
+      <div class="amt">${esc(r.amount)}</div>
+      <div class="type muted">${esc(r.type ? TYPES[r.type].label : 'Purchase')}</div>
+    </div>
+  </div>`;
+}
+
+/* ---------- study definitions ------------------------------------------ */
+const STUDIES = [
+  {
+    id: 'today', num: '00', name: 'As it ships today',
+    render: today,
+    blurb: `The category exists only as a hue and a glyph. Scan the dark column and try to name the second row's category without hovering — that's the bug. The right-hand badge says <em>Purchase</em> on every expense, spending the one text slot on the least distinguishing fact.`,
+    facts: [
+      ['Signal', 'Hue + glyph, no words'],
+      ['Fails at', '식비 vs 배달음식 vs Work — orange, yellow, lime'],
+      ['Baseline', 'Everything below is measured against this'],
+    ],
+  },
+  {
+    id: 'd1', num: '01', name: 'Inline category chip',
+    render: d1,
+    blurb: `The smallest honest fix. Layout is untouched; the category label rides into the subtitle as a tinted pill, and the redundant <em>Purchase</em> badge is dropped so the amount stands alone. Colour still helps, but the words now carry the meaning.`,
+    facts: [
+      ['Keeps', 'Row height, icon tile, scan rhythm'],
+      ['Costs', 'Account · date is squeezed on narrow phones'],
+      ['Best if', 'You want the change to feel like a bug fix, not a redesign'],
+    ],
+  },
+  {
+    id: 'd2', num: '02', name: 'Accent rail, label swap',
+    render: d2,
+    blurb: `The strongest hierarchy change: the <strong>category becomes the headline</strong> and the description drops to the subtitle. A 4px rail on the leading edge makes runs of the same category visible down the left edge of the list, and the icon shrinks to a bare glyph because the rail already carries the colour.`,
+    facts: [
+      ['Keeps', 'Row height, date ordering'],
+      ['Costs', 'Description is now secondary — worse for "what did I buy?"'],
+      ['Best if', 'You read the list by category first, memo second'],
+    ],
+  },
+  {
+    id: 'd3', num: '03', name: 'Solid icon, captioned',
+    render: d3,
+    blurb: `Identity lives entirely in the left column: the tile goes solid instead of a 12% tint, and the label sits under it in 10px uppercase. The text block is byte-for-byte what ships today, so nothing you already read moves.`,
+    facts: [
+      ['Keeps', 'Title and subtitle exactly as they are'],
+      ['Costs', '+6px per row; long labels like 배달음식 crowd 52px'],
+      ['Best if', 'You want zero disruption to the text you already scan'],
+    ],
+  },
+  {
+    id: 'd4', num: '04', name: 'Category sections',
+    render: null, list: d4list,
+    blurb: `Stop decorating rows; group them. Each header carries a colour dot, the category, a count and a subtotal, and the rows underneath go quiet. This is the only design that answers <em>"how much on 식비 this month?"</em> without opening the category detail page — and the only one that gives up date ordering.`,
+    facts: [
+      ['Keeps', 'Lowest colour load of all five'],
+      ['Costs', 'Date order is gone; trades land in sections of one; a category mixing ₩ and $ can show no single subtotal'],
+      ['Also needs', 'Grouping in <code>sheet_view_page.dart</code>, not just the tile'],
+    ],
+  },
+  {
+    id: 'd5', num: '05', name: 'Tinted row card',
+    render: d5,
+    blurb: `The most emphatic: the whole card takes a 9% wash of its hue plus a solid left border, and the category sits above the title in coloured micro-caps. Unmistakable one row at a time — but eleven tinted cards in a column is a lot of colour, and it fights the app's "premium and minimalist" brief.`,
+    facts: [
+      ['Keeps', 'Type label, demoted to a neutral micro-line'],
+      ['Costs', 'Card tints stack up; the quiet white list is gone'],
+      ['Best if', 'You want maximum separation and accept the noise'],
+    ],
+  },
+];
+
+/* ---------- build ------------------------------------------------------- */
+const screen = (s, dark) => {
+  const html = s.list ? s.list(dark) : ROWS.map(r => s.render(r, dark)).join('');
+  return `<div class="frame"><div class="screen ${dark ? 'dark' : 'light'}">${html}</div></div>`;
+};
+
+document.getElementById('studies').innerHTML = STUDIES.map(s => `
+  <section class="study" id="${s.id}">
+    <div class="grid">
+      <div class="spec">
+        <span class="num">${s.num}</span>
+        <h2>${s.name}</h2>
+        <p>${s.blurb}</p>
+        <dl class="facts">
+          ${s.facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}
+        </dl>
+      </div>
+      <div class="frames">
+        <div class="frame-col">
+          <div class="frame-label">Light</div>
+          ${screen(s, false)}
+        </div>
+        <div class="frame-col">
+          <div class="frame-label">Dark</div>
+          ${screen(s, true)}
+        </div>
+      </div>
+    </div>
+  </section>`).join('');
+</script>

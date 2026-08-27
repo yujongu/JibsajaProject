@@ -1,0 +1,526 @@
+<title>Intrinsic Block Width</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Roboto:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0&icon_names=arrow_downward,delivery_dining,directions_car,event_repeat,flight,help,restaurant,swap_horiz,trending_down,trending_up">
+
+<style>
+/* ============================================================
+   Round five. The block no longer has a width — it has a rule.
+   Chrome stays monochrome; tint stays at the Strong step.
+   ============================================================ */
+:root {
+  --bg:#E9EAEE; --panel:#FCFCFD; --sunk:#DFE1E7;
+  --ink:#16171C; --ink-2:#575A64; --ink-3:#8B8E99;
+  --rule:#D0D2DA; --rule-2:#BEC1CB; --chip:#FFFFFF;
+  --shadow: 0 1px 2px rgba(20,22,30,.05), 0 8px 24px -12px rgba(20,22,30,.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0F1014; --panel:#181A20; --sunk:#131419;
+    --ink:#ECEDF1; --ink-2:#9CA0AB; --ink-3:#6A6E79;
+    --rule:#272A32; --rule-2:#343843; --chip:#22242C;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0F1014; --panel:#181A20; --sunk:#131419;
+  --ink:#ECEDF1; --ink-2:#9CA0AB; --ink-3:#6A6E79;
+  --rule:#272A32; --rule-2:#343843; --chip:#22242C;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+h1, h2, h3 {
+  font-family: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
+  font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: -0.02em;
+}
+.eyebrow {
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px;
+  font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3);
+}
+code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: .86em; color: var(--ink-2);
+}
+
+.masthead { padding: 68px 0 34px; }
+.masthead h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.04; max-width: 16ch; }
+.masthead .lede { margin: 20px 0 0; max-width: 64ch; font-size: 17px; color: var(--ink-2); }
+.masthead .eyebrow { margin-bottom: 14px; }
+
+/* ---------- sticky controls ---------- */
+.bar {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  margin-bottom: 44px;
+}
+.bar .wrap {
+  display: flex; align-items: center; gap: 10px 20px; flex-wrap: wrap;
+  padding-top: 10px; padding-bottom: 10px;
+}
+.ctl { display: flex; align-items: center; gap: 9px; }
+.lbl {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3);
+}
+.seg { display: flex; gap: 2px; background: var(--sunk); border: 1px solid var(--rule); border-radius: 8px; padding: 2px; }
+.seg button {
+  font: inherit; font-family: "IBM Plex Mono", monospace; font-size: 12px;
+  padding: 4px 10px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ink-2); cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--chip); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+.computed {
+  margin-left: auto; display: flex; align-items: baseline; gap: 8px;
+  font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-3);
+}
+.computed b {
+  font-size: 16px; font-weight: 500; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- sections ---------- */
+section { padding-bottom: 62px; }
+section + section { border-top: 1px solid var(--rule); padding-top: 46px; }
+.sechead { max-width: 64ch; margin-bottom: 24px; }
+.sechead h2 { font-size: 25px; line-height: 1.15; margin-bottom: 8px; }
+.sechead .tag {
+  display: inline-block; font-family: "IBM Plex Mono", monospace;
+  font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule-2);
+  color: var(--ink-2); margin-bottom: 10px;
+}
+.sechead p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+
+/* ---------- frames ---------- */
+.frames { display: flex; gap: 22px; flex-wrap: wrap; }
+.frame-col { flex: 1 1 300px; min-width: 280px; max-width: 372px; }
+.frame-label {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); margin-bottom: 9px;
+  display: flex; gap: 8px; align-items: center;
+}
+.frame-label::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+.frame { border-radius: 26px; padding: 9px; background: var(--sunk); border: 1px solid var(--rule); box-shadow: var(--shadow); }
+.screen {
+  border-radius: 18px; padding: 12px; overflow: hidden;
+  font-family: Roboto, "Noto Sans KR", system-ui, sans-serif;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* ============================================================
+   Mockup tokens — copied from app_colors.dart. Tint fixed at
+   Strong. --scale simulates the phone's text-size setting; it
+   multiplies type only, never padding, exactly as Flutter's
+   textScaler behaves.
+   ============================================================ */
+.screen.light { background:#F8F9FB; --card:#FFFFFF; --t1:#191C1E; --t2:#424656; --tint:15%; --tint2:28%; }
+.screen.dark  { background:#080D1A; --card:#131D30; --t1:#F1F5F9; --t2:#94A3B8; --tint:24%; --tint2:38%; }
+.screen { --scale: 1; --pad: 8px; }
+
+.ms {
+  font-family: "Material Symbols Rounded"; font-weight: normal; font-style: normal;
+  line-height: 1; letter-spacing: normal; text-transform: none;
+  display: inline-block; white-space: nowrap; direction: ltr;
+  font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 1;
+}
+
+.row {
+  display: flex; align-items: stretch; gap: 0; padding: 0;
+  border-radius: 14px; overflow: hidden;
+  background: color-mix(in srgb, var(--c) var(--tint), var(--card));
+}
+.zone {
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--c) var(--tint2), var(--card));
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: calc(4px * var(--scale));
+  padding: 10px var(--pad);
+}
+.zone .ms { font-size: calc(20px * var(--scale)); color: var(--c); }
+.zone .lab {
+  font-size: calc(9px * var(--scale));
+  font-weight: 700; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--c); text-align: center; line-height: 1.2;
+  white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+}
+.body { flex: 1; min-width: 0; padding: 12px 10px 12px 13px; align-self: center; }
+.title {
+  font-size: calc(14px * var(--scale)); font-weight: 600; color: var(--t1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sub {
+  font-size: calc(12px * var(--scale)); color: var(--t2); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.right { align-self: center; text-align: right; flex-shrink: 0; padding: 12px 13px 12px 6px; }
+.amt {
+  font-size: calc(14px * var(--scale)); font-weight: 700; color: var(--t1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Uniform: every block takes the measured width of the widest label. */
+.uniform .zone { width: var(--bw); }
+/* Ragged: every block hugs its own label. */
+.ragged .zone { width: auto; }
+
+/* offscreen probe used to measure a label at the current scale */
+#probehost {
+  position: absolute; left: -9999px; top: 0; visibility: hidden;
+  pointer-events: none; width: 400px;
+}
+
+/* ---------- measurement table ---------- */
+.tablewrap { overflow-x: auto; margin-top: 20px; }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 13.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+thead th {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-3); font-weight: 500;
+  border-bottom: 1px solid var(--rule-2);
+}
+tbody th { font-weight: 600; color: var(--ink); white-space: nowrap; }
+td { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+td.w { font-family: "IBM Plex Mono", monospace; }
+tr.binds td, tr.binds th { color: var(--ink); font-weight: 600; }
+tr.binds { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+
+.notecards { display: grid; gap: 16px; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+.note { background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; padding: 18px 18px 20px; }
+.note h3 { font-size: 15px; margin-bottom: 6px; letter-spacing: -0.01em; }
+.note p { margin: 0 0 10px; font-size: 13.5px; color: var(--ink-2); }
+.note p:last-child { margin-bottom: 0; }
+pre {
+  margin: 12px 0 0; padding: 12px 13px; overflow-x: auto;
+  background: var(--sunk); border: 1px solid var(--rule); border-radius: 8px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+  line-height: 1.55; color: var(--ink-2);
+}
+pre .k { color: var(--ink); font-weight: 500; }
+
+footer { border-top: 1px solid var(--rule); padding: 26px 0 60px; font-size: 12.5px; color: var(--ink-3); }
+a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+html { scroll-behavior: smooth; }
+</style>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Jibsaja · Transactions tab · Round five</p>
+    <h1>The block has no width. It has a rule.</h1>
+    <p class="lede">
+      A hard-coded 56px is wrong the moment someone raises their phone's text size — the label
+      grows, the block doesn't, and the text clips. So don't set a width: <strong>measure the
+      widest label at the current text scale and let that be the width</strong>, plus a small
+      pad on each side. Change the text scale in the bar and watch the block follow.
+    </p>
+  </div>
+</header>
+
+<nav class="bar" aria-label="Text scale and padding">
+  <div class="wrap">
+    <div class="ctl">
+      <span class="lbl" id="sclbl">Text size</span>
+      <div class="seg" role="group" aria-labelledby="sclbl" id="scaleseg">
+        <button type="button" data-s="0.85">85%</button>
+        <button type="button" data-s="1" aria-pressed="true">100%</button>
+        <button type="button" data-s="1.15">115%</button>
+        <button type="button" data-s="1.3">130%</button>
+        <button type="button" data-s="1.6">160%</button>
+      </div>
+    </div>
+    <div class="ctl">
+      <span class="lbl" id="padlbl">Side pad</span>
+      <div class="seg" role="group" aria-labelledby="padlbl" id="padseg">
+        <button type="button" data-p="6">6</button>
+        <button type="button" data-p="8" aria-pressed="true">8</button>
+        <button type="button" data-p="10">10</button>
+      </div>
+    </div>
+    <p class="computed">Block width <b id="bwout">—</b> <span id="bwwhy"></span></p>
+  </div>
+</nav>
+
+<main class="wrap">
+  <section id="uniform">
+    <div class="sechead">
+      <span class="tag">Recommended</span>
+      <h2>Uniform — measured once, shared by every row</h2>
+      <p>
+        Every block is as narrow as the <em>widest label in the set</em> allows, and no narrower.
+        The blocks stay aligned, so the edge between block and description is a straight line you
+        can scan down — and the whole thing re-measures when the text scale changes.
+      </p>
+    </div>
+    <div class="frames">
+      <div class="frame-col">
+        <div class="frame-label">Light</div>
+        <div class="frame"><div class="screen light uniform" id="u-light"></div></div>
+      </div>
+      <div class="frame-col">
+        <div class="frame-label">Dark</div>
+        <div class="frame"><div class="screen dark uniform" id="u-dark"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="ragged">
+    <div class="sechead">
+      <span class="tag">The alternative</span>
+      <h2>Ragged — every block hugs its own label</h2>
+      <p>
+        Truly intrinsic: no measuring, no shared value, each block exactly as wide as its own text.
+        Minimal by definition and the simplest possible code — but the inner edge zigzags down the
+        list, and 식비 and Transfer no longer start their descriptions at the same place. Scroll
+        the two sections back to back; this is the trade.
+      </p>
+    </div>
+    <div class="frames">
+      <div class="frame-col">
+        <div class="frame-label">Light</div>
+        <div class="frame"><div class="screen light ragged" id="r-light"></div></div>
+      </div>
+      <div class="frame-col">
+        <div class="frame-label">Dark</div>
+        <div class="frame"><div class="screen dark ragged" id="r-dark"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="measured">
+    <div class="sechead">
+      <h2>What's actually being measured</h2>
+      <p>
+        Every label the block can ever hold — twelve categories and four writable types — measured
+        in your browser at the current text scale. The widest one sets the width; the highlighted
+        row is the one that binds right now.
+      </p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Label</th>
+            <th scope="col">Source</th>
+            <th scope="col">Measured</th>
+            <th scope="col">Block if it won</th>
+          </tr>
+        </thead>
+        <tbody id="mtable"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="sechead">
+      <h2>How this lands in Flutter</h2>
+      <p>
+        The browser measures with a hidden span; Flutter measures with <code>TextPainter</code>.
+        Same rule, and it re-runs whenever the platform text scale changes because
+        <code>MediaQuery</code> rebuilds the widget for you.
+      </p>
+    </div>
+    <div class="notecards">
+      <div class="note">
+        <h3>Measure the set, not the row</h3>
+        <p>
+          Lay out all sixteen labels once for the current scaler, keep the widest, and cache it
+          keyed on that scaler — it's sixteen text layouts on a scale change, not per row, per
+          frame.
+        </p>
+<pre><span class="k">double</span> blockWidth(BuildContext context) {
+  final scaler = MediaQuery.textScalerOf(context);
+  final style = TextStyle(fontSize: 9, fontWeight: FontWeight.w700);
+  var w = 0.0;
+  <span class="k">for</span> (final label in knownBlockLabels) {
+    final tp = TextPainter(
+      text: TextSpan(text: label.toUpperCase(), style: style),
+      textScaler: scaler,
+      textDirection: TextDirection.ltr,
+    )..layout();
+    w = max(w, tp.width);
+  }
+  <span class="k">return</span> w + 2 * 8; <span class="k">// the side pad</span>
+}</pre>
+      </div>
+      <div class="note">
+        <h3>Unknown types must not widen it</h3>
+        <p>
+          A row whose sheet <code>Type</code> the app doesn't recognise shows the sheet's own
+          wording, which can be any length. Measure only the sixteen known labels; let an
+          unrecognised one ellipsize inside the block it's given.
+        </p>
+        <p>
+          Otherwise a single stray value like <em>"Reimbursement adjustment"</em> in one cell
+          widens the block on every row of the month.
+        </p>
+      </div>
+      <div class="note">
+        <h3>Cap it before it eats the row</h3>
+        <p>
+          At 160% the block is roughly 78px and the description is visibly squeezed. Clamp the
+          measured width to about a third of the card — past that, keep the icon, drop the label
+          to the body as a coloured kicker, and let the description have the room back.
+        </p>
+        <p>
+          Padding stays fixed at every scale, which is what Flutter's <code>textScaler</code>
+          does too — it scales type, never <code>EdgeInsets</code>.
+        </p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  Colours from <code>app_colors.dart</code> and <code>transaction_category_ui.dart</code>; label set
+  from <code>TransactionCategoryX.sheetValue</code> and <code>TransactionTypeX.label</code>; row
+  semantics from <code>docs/data/sheets.md</code>.
+</footer>
+
+<div id="probehost"><div class="screen light"><span class="lab" id="probe"></span></div></div>
+
+<script>
+const CATS = {
+  food:      { label:'식비',     icon:'restaurant',      l:'#EA580C', d:'#FB923C' },
+  delivery:  { label:'배달음식', icon:'delivery_dining', l:'#CA8A04', d:'#FACC15' },
+  transport: { label:'교통',     icon:'directions_car',  l:'#0284C7', d:'#38BDF8' },
+  monthly:   { label:'Monthly',  icon:'event_repeat',    l:'#4F46E5', d:'#818CF8' },
+  travel:    { label:'여행',     icon:'flight',          l:'#0D9488', d:'#2DD4BF' },
+};
+const TYPES = {
+  deposit:  { label:'Deposit',  icon:'arrow_downward', l:'#059669', d:'#059669' },
+  buy:      { label:'Buy',      icon:'trending_up',    l:'#0055B2', d:'#0055B2' },
+  sell:     { label:'Sell',     icon:'trending_down',  l:'#F59E0B', d:'#F59E0B' },
+  transfer: { label:'Transfer', icon:'swap_horiz',     l:'#0891B2', d:'#0891B2' },
+  dividend: { label:'Dividend', icon:'help',           l:'#737687', d:'#737687' },
+};
+
+/* Every label the block can hold: the twelve Category values from
+   TransactionCategoryX.sheetValue, plus the four writable type labels.
+   `dividend` is deliberately absent — an unrecognised Type shows the sheet's
+   own wording and must never widen the block. */
+const KNOWN = [
+  ['Monthly','Category'], ['교통','Category'], ['식비','Category'], ['생필품','Category'],
+  ['의류','Category'], ['Fun','Category'], ['배달음식','Category'], ['Misc.','Category'],
+  ['Work','Category'], ['경조사','Category'], ['웨딩','Category'], ['여행','Category'],
+  ['Deposit','Type'], ['Buy','Type'], ['Sell','Type'], ['Transfer','Type'],
+];
+
+const ROWS = [
+  { cat:'food',      title:'점심 김밥천국',       account:'신한카드',       date:'Aug 24, 2026', amount:'-₩12,000' },
+  { cat:'delivery',  title:'쿠팡이츠 저녁',       account:'신한카드',       date:'Aug 24, 2026', amount:'-₩23,500' },
+  { cat:'food',      title:'스타벅스 아메리카노', account:'신한카드',       date:'Aug 23, 2026', amount:'-₩6,800' },
+  { cat:'transport', title:'Uber to SFO',         account:'Chase',          date:'Aug 22, 2026', amount:'-$38.40' },
+  { cat:'monthly',   title:'Netflix',             account:'Chase',          date:'Aug 21, 2026', amount:'-$15.49' },
+  { cat:'travel',    title:'Hotel Osaka',         account:'Chase',          date:'Aug 21, 2026', amount:'-$212.00' },
+  { type:'deposit',  title:'Paycheck',            account:'BoA',            date:'Aug 20, 2026', amount:'+$3,250.00' },
+  { type:'buy',      title:'AAPL',                account:'Robinhood',      date:'Aug 19, 2026', amount:'$2,274.00', meta:'10 @ 227.4' },
+  { type:'transfer', title:'Buy AAPL',            account:'Robinhood Cash', date:'Aug 19, 2026', amount:'-$2,274.00' },
+  { type:'sell',     title:'NVDA',                account:'Robinhood',      date:'Aug 18, 2026', amount:'-$472.80', meta:'-4 @ 118.2' },
+  { type:'dividend', title:'AAPL dividend',       account:'Robinhood',      date:'Aug 17, 2026', amount:'$8.10' },
+];
+
+function facet(r, dark) {
+  const s = r.cat ? CATS[r.cat] : TYPES[r.type];
+  return { label: s.label, icon: s.icon, color: dark ? s.d : s.l };
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+const sub = (r) => [r.account, r.date, r.meta].filter(Boolean).map(esc).join(' · ');
+
+function row(r, dark) {
+  const f = facet(r, dark);
+  return `<div class="row" style="--c:${f.color}">
+    <div class="zone"><span class="ms">${f.icon}</span><span class="lab">${esc(f.label)}</span></div>
+    <div class="body">
+      <div class="title">${esc(r.title)}</div>
+      <div class="sub">${sub(r)}</div>
+    </div>
+    <div class="right"><div class="amt">${esc(r.amount)}</div></div>
+  </div>`;
+}
+
+const screens = ['u-light','u-dark','r-light','r-dark'].map(id => document.getElementById(id));
+screens.forEach(el => el.innerHTML = ROWS.map(r => row(r, el.classList.contains('dark'))).join(''));
+
+/* ---- measurement -------------------------------------------------------
+   The probe carries the real .lab class inside a real .screen, so it picks
+   up the same font stack, weight, letter-spacing and uppercase transform the
+   rows use. Flutter does the same job with TextPainter.
+   ------------------------------------------------------------------------ */
+const probeHost = document.querySelector('#probehost .screen');
+const probe = document.getElementById('probe');
+const bwout = document.getElementById('bwout');
+const bwwhy = document.getElementById('bwwhy');
+
+let scale = 1, pad = 8;
+
+function widthOf(text) {
+  probe.textContent = text;
+  return probe.getBoundingClientRect().width;
+}
+
+function apply() {
+  probeHost.style.setProperty('--scale', scale);
+  /* the probe must not inherit the ellipsis clamp while measuring */
+  probe.style.maxWidth = 'none';
+  probe.style.overflow = 'visible';
+
+  const measured = KNOWN.map(([label, source]) => ({ label, source, w: widthOf(label) }));
+  const widest = measured.reduce((a, b) => (b.w > a.w ? b : a));
+  const iconFloor = 20 * scale;
+  const content = Math.max(widest.w, iconFloor);
+  const bw = Math.ceil(content + 2 * pad);
+
+  screens.forEach(el => {
+    el.style.setProperty('--scale', scale);
+    el.style.setProperty('--pad', pad + 'px');
+    el.style.setProperty('--bw', bw + 'px');
+  });
+
+  bwout.textContent = bw + 'px';
+  bwwhy.textContent = `= ${Math.ceil(widest.w)}px "${widest.label}" + 2×${pad}px`;
+
+  const sorted = [...measured].sort((a, b) => b.w - a.w);
+  document.getElementById('mtable').innerHTML = sorted.map(m => `
+    <tr class="${m === sorted[0] ? 'binds' : ''}">
+      <th scope="row">${esc(m.label)}</th>
+      <td>${m.source}</td>
+      <td class="w">${m.w.toFixed(1)}px</td>
+      <td class="w">${Math.ceil(Math.max(m.w, iconFloor) + 2 * pad)}px</td>
+    </tr>`).join('');
+}
+
+document.getElementById('scaleseg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  scale = Number(b.dataset.s);
+  document.querySelectorAll('#scaleseg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  apply();
+});
+document.getElementById('padseg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  pad = Number(b.dataset.p);
+  document.querySelectorAll('#padseg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  apply();
+});
+
+apply();
+/* Web fonts land after first paint; re-measure once they do, or the numbers
+   describe the fallback face instead of Roboto. */
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(apply);
+</script>

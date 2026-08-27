@@ -1,0 +1,623 @@
+<title>Tinted Row Studies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Roboto:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0&icon_names=arrow_downward,delivery_dining,directions_car,event_repeat,flight,help,restaurant,swap_horiz,trending_down,trending_up">
+
+<style>
+/* ============================================================
+   Round two. Same monochrome graphite chrome as the first set,
+   so the only chromatic pixels on the page are the app's own.
+   ============================================================ */
+:root {
+  --bg:      #E9EAEE;
+  --panel:   #FCFCFD;
+  --sunk:    #DFE1E7;
+  --ink:     #16171C;
+  --ink-2:   #575A64;
+  --ink-3:   #8B8E99;
+  --rule:    #D0D2DA;
+  --rule-2:  #BEC1CB;
+  --chip:    #FFFFFF;
+  --shadow:  0 1px 2px rgba(20,22,30,.05), 0 8px 24px -12px rgba(20,22,30,.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:     #0F1014;
+    --panel:  #181A20;
+    --sunk:   #131419;
+    --ink:    #ECEDF1;
+    --ink-2:  #9CA0AB;
+    --ink-3:  #6A6E79;
+    --rule:   #272A32;
+    --rule-2: #343843;
+    --chip:   #22242C;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:     #0F1014;
+  --panel:  #181A20;
+  --sunk:   #131419;
+  --ink:    #ECEDF1;
+  --ink-2:  #9CA0AB;
+  --ink-3:  #6A6E79;
+  --rule:   #272A32;
+  --rule-2: #343843;
+  --chip:   #22242C;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+h1, h2, h3 {
+  font-family: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
+  font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: -0.02em;
+}
+
+.eyebrow {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px; font-weight: 500; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+
+code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: .86em; color: var(--ink-2);
+}
+
+/* ---------- masthead ---------- */
+.masthead { padding: 68px 0 36px; }
+.masthead h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.04; max-width: 16ch; }
+.masthead .lede { margin: 20px 0 0; max-width: 64ch; font-size: 17px; color: var(--ink-2); }
+.masthead .eyebrow { margin-bottom: 14px; }
+
+/* ---------- sticky control bar ---------- */
+.bar {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 52px;
+}
+.bar .wrap { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.bar ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 2px; overflow-x: auto; }
+.bar ol a {
+  display: block; padding: 12px 12px; font-size: 13px; font-weight: 500;
+  white-space: nowrap; color: var(--ink-2); text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.bar ol a:hover, .bar ol a:focus-visible { color: var(--ink); border-bottom-color: var(--rule-2); }
+.bar ol .num { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-3); margin-right: 6px; }
+
+.tintctl { margin-left: auto; display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.tintctl .lbl {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3);
+}
+.seg { display: flex; background: var(--sunk); border: 1px solid var(--rule); border-radius: 8px; padding: 2px; gap: 2px; }
+.seg button {
+  font: inherit; font-size: 12.5px; font-weight: 500;
+  padding: 4px 12px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ink-2); cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--chip); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+/* ---------- study block ---------- */
+.study { padding-bottom: 72px; }
+.study + .study { border-top: 1px solid var(--rule); padding-top: 52px; }
+
+.grid { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; gap: 40px; align-items: start; }
+.spec { position: sticky; top: 82px; }
+.spec h2 { font-size: 25px; line-height: 1.15; margin-bottom: 4px; }
+.spec .num {
+  font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 500;
+  color: var(--ink-3); display: block; margin-bottom: 10px;
+}
+.spec p { margin: 14px 0 0; font-size: 14.5px; color: var(--ink-2); }
+
+.facts { margin: 22px 0 0; border-top: 1px solid var(--rule); }
+.facts div {
+  display: grid; grid-template-columns: 76px 1fr; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--rule);
+  font-size: 13px; line-height: 1.45;
+}
+.facts dt {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 2px 0 0;
+}
+.facts dd { margin: 0; color: var(--ink-2); }
+
+/* ---------- phone frames ---------- */
+.frames { display: flex; gap: 22px; flex-wrap: wrap; }
+.frame-col { flex: 1 1 300px; min-width: 280px; max-width: 372px; }
+.frame-label {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+  margin-bottom: 9px; display: flex; gap: 8px; align-items: center;
+}
+.frame-label::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+
+.frame {
+  border-radius: 26px; padding: 9px;
+  background: var(--sunk); border: 1px solid var(--rule); box-shadow: var(--shadow);
+}
+.screen {
+  border-radius: 18px; padding: 12px; overflow: hidden;
+  font-family: Roboto, "Noto Sans KR", system-ui, sans-serif;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* ============================================================
+   Mockup tokens — every value copied from app_colors.dart.
+   --tint / --tint2 are the two wash strengths; dark needs more
+   percentage than light to shift the #131D30 card at all.
+   ============================================================ */
+.screen.light { background:#F8F9FB; --card:#FFFFFF; --bd:#C2C6D8; --t1:#191C1E; --t2:#424656; --t3:#737687; --on-hue:#FFFFFF; }
+.screen.dark  { background:#080D1A; --card:#131D30; --bd:#1E2D47; --t1:#F1F5F9; --t2:#94A3B8; --t3:#4B5E7A; --on-hue:#0B1120; }
+
+.screen.light[data-tint="subtle"] { --tint: 5%;  --tint2: 10%; }
+.screen.light[data-tint="medium"] { --tint: 9%;  --tint2: 18%; }
+.screen.light[data-tint="strong"] { --tint: 15%; --tint2: 28%; }
+.screen.dark[data-tint="subtle"]  { --tint: 9%;  --tint2: 16%; }
+.screen.dark[data-tint="medium"]  { --tint: 15%; --tint2: 26%; }
+.screen.dark[data-tint="strong"]  { --tint: 24%; --tint2: 38%; }
+
+.ms {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal; font-style: normal; line-height: 1;
+  letter-spacing: normal; text-transform: none;
+  display: inline-block; white-space: nowrap; direction: ltr;
+  font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 1;
+}
+
+/* shared row scaffolding — every variant below starts here */
+.row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: 14px;
+  background: color-mix(in srgb, var(--c) var(--tint), var(--card));
+  border: .5px solid transparent;
+}
+.row .body { flex: 1; min-width: 0; }
+.row .title {
+  font-size: 14px; font-weight: 600; color: var(--t1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row .sub {
+  font-size: 12px; color: var(--t2); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row .right { text-align: right; flex-shrink: 0; }
+.row .amt { font-size: 14px; font-weight: 700; color: var(--t1); font-variant-numeric: tabular-nums; }
+.row .kicker {
+  font-size: 10px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--c); margin-bottom: 1px;
+}
+.tile {
+  width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--c) var(--tint2), transparent);
+}
+.tile .ms { font-size: 20px; color: var(--c); }
+
+/* A — flat wash, nothing else */
+.vA { border-color: transparent; }
+
+/* B — wash fades out under the amount */
+.vB {
+  background: linear-gradient(96deg,
+    color-mix(in srgb, var(--c) var(--tint2), var(--card)) 0%,
+    color-mix(in srgb, var(--c) var(--tint), var(--card)) 42%,
+    var(--card) 92%);
+  border-color: var(--bd);
+}
+
+/* C — wash plus a solid label pill */
+.vC .pill {
+  display: inline-block; background: var(--c); color: var(--on-hue);
+  font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 6px; margin-bottom: 3px; line-height: 1.2;
+}
+.vC .tile { background: color-mix(in srgb, var(--c) var(--tint2), transparent); }
+
+/* D — wash inside a full hue outline, label above the amount */
+.vD {
+  border: 1px solid color-mix(in srgb, var(--c) 42%, transparent);
+  border-radius: 12px;
+}
+.vD .right .kicker { margin: 0 0 2px; }
+
+/* E — stronger-tinted identity block against a lighter body */
+.vE { padding: 0; overflow: hidden; gap: 0; border-color: transparent; }
+.vE .zone {
+  align-self: stretch; width: 68px; flex-shrink: 0;
+  background: color-mix(in srgb, var(--c) var(--tint2), var(--card));
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 10px 4px;
+}
+.vE .zone .ms { font-size: 20px; color: var(--c); }
+.vE .zone .lab {
+  font-size: 9px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--c); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.vE .body { padding: 12px 12px 12px 14px; }
+.vE .right { padding: 12px 14px 12px 0; }
+
+/* ---------- comparison ---------- */
+.compare { border-top: 1px solid var(--rule); padding: 52px 0 40px; }
+.tablewrap { overflow-x: auto; margin-top: 24px; }
+table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 13.5px; }
+th, td { text-align: left; padding: 13px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+thead th {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3);
+  font-weight: 500; border-bottom: 1px solid var(--rule-2);
+}
+tbody th { font-weight: 600; color: var(--ink); white-space: nowrap; }
+tbody th .n { font-family: "IBM Plex Mono", monospace; color: var(--ink-3); font-size: 11px; margin-right: 6px; }
+td { color: var(--ink-2); }
+.mark { font-weight: 700; color: var(--ink); }
+
+/* ---------- notes ---------- */
+.notes { padding-bottom: 84px; }
+.notes h2 { font-size: 22px; margin-bottom: 8px; }
+.notecards { display: grid; gap: 16px; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+.note { background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; padding: 18px 18px 20px; }
+.note h3 { font-size: 15px; margin-bottom: 6px; letter-spacing: -0.01em; }
+.note p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+
+footer { border-top: 1px solid var(--rule); padding: 26px 0 60px; font-size: 12.5px; color: var(--ink-3); }
+footer a { color: var(--ink-2); }
+
+a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: 1fr; gap: 26px; }
+  .spec { position: static; }
+  .tintctl { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+html { scroll-behavior: smooth; }
+</style>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Jibsaja · Transactions tab · Round two</p>
+    <h1>Five ways to tint a row</h1>
+    <p class="lede">
+      The tinted card is the direction. What's still open is <em>how</em> the tint is applied — a flat
+      wash reads calmly but weakly, a full outline separates hard but adds eleven coloured rectangles
+      to a screen. All five below tint the whole card; they differ in what carries the edge and where
+      the category label sits. The strength control in the bar applies to every variant at once, so
+      you can settle layout and intensity separately.
+    </p>
+  </div>
+</header>
+
+<nav class="bar" aria-label="Variants and tint strength">
+  <div class="wrap">
+    <ol>
+      <li><a href="#vA"><span class="num">A</span>Flat wash</a></li>
+      <li><a href="#vB"><span class="num">B</span>Fade</a></li>
+      <li><a href="#vC"><span class="num">C</span>Label pill</a></li>
+      <li><a href="#vD"><span class="num">D</span>Outlined</a></li>
+      <li><a href="#vE"><span class="num">E</span>Split block</a></li>
+      <li><a href="#compare"><span class="num">··</span>Compare</a></li>
+    </ol>
+    <div class="tintctl">
+      <span class="lbl" id="tintlbl">Tint</span>
+      <div class="seg" role="group" aria-labelledby="tintlbl">
+        <button type="button" data-tint="subtle" aria-pressed="false">Subtle</button>
+        <button type="button" data-tint="medium" aria-pressed="true">Medium</button>
+        <button type="button" data-tint="strong" aria-pressed="false">Strong</button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap" id="studies"></main>
+
+<section class="compare wrap" id="compare">
+  <p class="eyebrow">Compare</p>
+  <h2>What separates them</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Variant</th>
+          <th scope="col">Carries the edge</th>
+          <th scope="col">Label sits</th>
+          <th scope="col">Amount on</th>
+          <th scope="col">Holds up at Strong</th>
+          <th scope="col">Row height</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row"><span class="n">A</span>Flat wash</th>
+          <td>Nothing — tint alone</td>
+          <td>Above the title</td>
+          <td>Tint</td>
+          <td><span class="mark">Yes</span>, and it needs Strong to separate</td>
+          <td>+4px</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">B</span>Fade</th>
+          <td>Gradient, strong at the left</td>
+          <td>Above the title</td>
+          <td><span class="mark">Plain card</span></td>
+          <td>Yes — the fade absorbs it</td>
+          <td>+4px</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">C</span>Label pill</th>
+          <td>Solid pill</td>
+          <td>Above the title, filled</td>
+          <td>Tint</td>
+          <td>Gets loud — pill plus wash</td>
+          <td>+8px</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">D</span>Outlined</th>
+          <td>1px hue border, all four sides</td>
+          <td><span class="mark">Right</span>, above the amount</td>
+          <td>Tint</td>
+          <td>Border and fill compete</td>
+          <td>Unchanged</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">E</span>Split block</th>
+          <td>Two-step tint, hard vertical edge</td>
+          <td>Under the icon, left</td>
+          <td>Lighter tint</td>
+          <td><span class="mark">Best</span> — the step stays readable</td>
+          <td>Unchanged</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="notes wrap">
+  <p class="eyebrow">Reading the mockups</p>
+  <h2>Three things to check before you pick</h2>
+  <div class="notecards">
+    <div class="note">
+      <h3>Dark mode needs more tint than light</h3>
+      <p>
+        A 9% wash over white is clearly visible; the same 9% over the <code>#131D30</code> card is
+        almost nothing. Each strength here sets a higher percentage in dark than in light
+        (Medium is 9% / 15%) — otherwise every variant looks solved in light and unsolved in dark.
+      </p>
+    </div>
+    <div class="note">
+      <h3>The trade rows still look flat</h3>
+      <p>
+        Buy uses <code>primary</code> #0055B2 and Deposit <code>positive</code> #059669 — both
+        single constants with no dark variant, so their tint barely lifts off the navy card. Compare
+        the Buy row against 여행 in the dark column at any strength. Whichever variant wins, those
+        five type colours want light/dark pairs like the twelve categories already have.
+      </p>
+    </div>
+    <div class="note">
+      <h3>Eleven tinted cards is the real test</h3>
+      <p>
+        Any of these looks good as a single row. Judge them as a column: scroll each frame and ask
+        whether the list still feels like one surface or eleven stickers. That is where A and E
+        separate from C and D.
+      </p>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap">
+  Colours from <code>app_colors.dart</code> and <code>transaction_category_ui.dart</code>; row
+  semantics from <code>docs/data/sheets.md</code>. Round one, with the untinted alternatives, is at
+  <code>docs/design/transaction-row-options.html</code>.
+</footer>
+
+<script>
+/* Category hues ship as light/dark pairs in transaction_category_ui.dart;
+   the five type colours in _typeColor are single constants. */
+const CATS = {
+  food:      { label: '식비',     icon: 'restaurant',      l: '#EA580C', d: '#FB923C' },
+  delivery:  { label: '배달음식', icon: 'delivery_dining', l: '#CA8A04', d: '#FACC15' },
+  transport: { label: '교통',     icon: 'directions_car',  l: '#0284C7', d: '#38BDF8' },
+  monthly:   { label: 'Monthly',  icon: 'event_repeat',    l: '#4F46E5', d: '#818CF8' },
+  travel:    { label: '여행',     icon: 'flight',          l: '#0D9488', d: '#2DD4BF' },
+};
+const TYPES = {
+  deposit:  { label: 'Deposit',  icon: 'arrow_downward', l: '#059669', d: '#059669' },
+  buy:      { label: 'Buy',      icon: 'trending_up',    l: '#0055B2', d: '#0055B2' },
+  sell:     { label: 'Sell',     icon: 'trending_down',  l: '#F59E0B', d: '#F59E0B' },
+  transfer: { label: 'Transfer', icon: 'swap_horiz',     l: '#0891B2', d: '#0891B2' },
+  dividend: { label: 'Dividend', icon: 'help',           l: '#737687', d: '#737687' },
+};
+
+/* Same eleven rows as round one, so the two sets stay comparable. */
+const ROWS = [
+  { cat: 'food',      title: '점심 김밥천국',      account: '신한카드',       date: 'Aug 24, 2026', amount: '-₩12,000' },
+  { cat: 'delivery',  title: '쿠팡이츠 저녁',      account: '신한카드',       date: 'Aug 24, 2026', amount: '-₩23,500' },
+  { cat: 'food',      title: '스타벅스 아메리카노', account: '신한카드',       date: 'Aug 23, 2026', amount: '-₩6,800' },
+  { cat: 'transport', title: 'Uber to SFO',        account: 'Chase',          date: 'Aug 22, 2026', amount: '-$38.40' },
+  { cat: 'monthly',   title: 'Netflix',            account: 'Chase',          date: 'Aug 21, 2026', amount: '-$15.49' },
+  { cat: 'travel',    title: 'Hotel Osaka',        account: 'Chase',          date: 'Aug 21, 2026', amount: '-$212.00' },
+  { type: 'deposit',  title: 'Paycheck',           account: 'BoA',            date: 'Aug 20, 2026', amount: '+$3,250.00' },
+  { type: 'buy',      title: 'AAPL',               account: 'Robinhood',      date: 'Aug 19, 2026', amount: '$2,274.00', meta: '10 @ 227.4' },
+  { type: 'transfer', title: 'Buy AAPL',           account: 'Robinhood Cash', date: 'Aug 19, 2026', amount: '-$2,274.00' },
+  { type: 'sell',     title: 'NVDA',               account: 'Robinhood',      date: 'Aug 18, 2026', amount: '-$472.80',  meta: '-4 @ 118.2' },
+  { type: 'dividend', title: 'AAPL dividend',      account: 'Robinhood',      date: 'Aug 17, 2026', amount: '$8.10' },
+];
+
+/* Expense rows resolve to their category; every other row to its type —
+   the sheet gives non-expense rows no Category at all. */
+function facet(r, dark) {
+  const src = r.cat ? CATS[r.cat] : TYPES[r.type];
+  return { label: src.label, icon: src.icon, color: dark ? src.d : src.l };
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+const sub = (r) => [r.account, r.date, r.meta].filter(Boolean).map(esc).join(' · ');
+const icon = (n) => `<span class="ms">${n}</span>`;
+
+/* ---------- variants --------------------------------------------------- */
+
+// A — flat wash, no border, no rail. The tint is the only device.
+const vA = (r, d) => { const f = facet(r, d); return `<div class="row vA" style="--c:${f.color}">
+  <div class="tile">${icon(f.icon)}</div>
+  <div class="body">
+    <div class="kicker">${esc(f.label)}</div>
+    <div class="title">${esc(r.title)}</div>
+    <div class="sub">${sub(r)}</div>
+  </div>
+  <div class="right"><div class="amt">${esc(r.amount)}</div></div>
+</div>`; };
+
+// B — the wash fades out before the amount, so digits sit on plain card.
+const vB = (r, d) => { const f = facet(r, d); return `<div class="row vB" style="--c:${f.color}">
+  <div class="tile">${icon(f.icon)}</div>
+  <div class="body">
+    <div class="kicker">${esc(f.label)}</div>
+    <div class="title">${esc(r.title)}</div>
+    <div class="sub">${sub(r)}</div>
+  </div>
+  <div class="right"><div class="amt">${esc(r.amount)}</div></div>
+</div>`; };
+
+// C — wash plus a solid label pill: highest contrast on the category name.
+const vC = (r, d) => { const f = facet(r, d); return `<div class="row vC" style="--c:${f.color}">
+  <div class="tile">${icon(f.icon)}</div>
+  <div class="body">
+    <span class="pill">${esc(f.label)}</span>
+    <div class="title">${esc(r.title)}</div>
+    <div class="sub">${sub(r)}</div>
+  </div>
+  <div class="right"><div class="amt">${esc(r.amount)}</div></div>
+</div>`; };
+
+// D — wash inside a full hue outline; label moves right, above the amount.
+const vD = (r, d) => { const f = facet(r, d); return `<div class="row vD" style="--c:${f.color}">
+  <div class="tile">${icon(f.icon)}</div>
+  <div class="body">
+    <div class="title">${esc(r.title)}</div>
+    <div class="sub">${sub(r)}</div>
+  </div>
+  <div class="right">
+    <div class="kicker">${esc(f.label)}</div>
+    <div class="amt">${esc(r.amount)}</div>
+  </div>
+</div>`; };
+
+// E — two tint steps: a deeper identity block, a lighter body.
+const vE = (r, d) => { const f = facet(r, d); return `<div class="row vE" style="--c:${f.color}">
+  <div class="zone">${icon(f.icon)}<span class="lab">${esc(f.label)}</span></div>
+  <div class="body">
+    <div class="title">${esc(r.title)}</div>
+    <div class="sub">${sub(r)}</div>
+  </div>
+  <div class="right"><div class="amt">${esc(r.amount)}</div></div>
+</div>`; };
+
+const STUDIES = [
+  {
+    id: 'vA', num: 'A', name: 'Flat wash', render: vA,
+    blurb: `The whole card takes one even wash and nothing else — no border, no rail, no second device. The quietest of the five and the closest to the app's minimalist brief, but it leans entirely on tint strength: at <em>Subtle</em> the pale hues (slate, sky) nearly vanish. Try it at <em>Strong</em>.`,
+    facts: [
+      ['Device', 'Tint only'],
+      ['Watch', 'Pale hues need Strong to register'],
+      ['Best if', 'You want colour felt, not announced'],
+    ],
+  },
+  {
+    id: 'vB', num: 'B', name: 'Wash that fades', render: vB,
+    blurb: `The tint starts deeper at the identity edge and fades to plain card by the right margin, so the <strong>amount always sits on a neutral ground</strong> — no hue shifting under the digits from row to row. Colour is strongest exactly where the icon and label are, which is where it does the work.`,
+    facts: [
+      ['Device', 'Left-to-right gradient'],
+      ['Wins', 'Amounts stay on one consistent surface'],
+      ['Watch', 'Gradients on 11 stacked cards need testing on a real panel'],
+    ],
+  },
+  {
+    id: 'vC', num: 'C', name: 'Wash plus label pill', render: vC,
+    blurb: `The category becomes a solid pill — hue fill, card-coloured text — sitting on the washed card. The most legible label of the five, and the only one that names the category at full contrast rather than in tinted text. The cost is loudness: a fill inside a fill.`,
+    facts: [
+      ['Device', 'Solid pill on a wash'],
+      ['Wins', 'Label contrast, at any tint strength'],
+      ['Watch', '+8px per row; busy at Strong'],
+    ],
+  },
+  {
+    id: 'vD', num: 'D', name: 'Outlined tint', render: vD,
+    blurb: `A 1px hue border on all four sides gives each row a hard, complete edge, and the label moves to the right column above the amount — so the left side stays exactly as it reads today. Separation is unambiguous; eleven outlined rectangles is also the most rectangle-y the list gets.`,
+    facts: [
+      ['Device', 'Full hue outline'],
+      ['Wins', 'Clearest row boundaries; row height unchanged'],
+      ['Watch', 'Border and fill compete at Strong'],
+    ],
+  },
+  {
+    id: 'vE', num: 'E', name: 'Split block', render: vE,
+    blurb: `Two tint steps instead of one: a deeper block holding the icon and label, a lighter body behind the text. The hard vertical edge between them does the separating, so the card can stay calm overall and still read at a glance. Holds up best of the five when you scroll a full month.`,
+    facts: [
+      ['Device', 'Two-step tint, hard edge'],
+      ['Wins', 'Reads at every strength; height unchanged'],
+      ['Watch', '68px block truncates long labels (배달음식)'],
+    ],
+  },
+];
+
+/* ---------- build ------------------------------------------------------- */
+let tint = 'medium';
+
+const screen = (s, dark) =>
+  `<div class="frame"><div class="screen ${dark ? 'dark' : 'light'}" data-tint="${tint}">` +
+  ROWS.map(r => s.render(r, dark)).join('') + `</div></div>`;
+
+function build() {
+  document.getElementById('studies').innerHTML = STUDIES.map(s => `
+    <section class="study" id="${s.id}">
+      <div class="grid">
+        <div class="spec">
+          <span class="num">${s.num}</span>
+          <h2>${s.name}</h2>
+          <p>${s.blurb}</p>
+          <dl class="facts">
+            ${s.facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}
+          </dl>
+        </div>
+        <div class="frames">
+          <div class="frame-col"><div class="frame-label">Light</div>${screen(s, false)}</div>
+          <div class="frame-col"><div class="frame-label">Dark</div>${screen(s, true)}</div>
+        </div>
+      </div>
+    </section>`).join('');
+}
+build();
+
+/* Strength changes an attribute on every screen — no re-render, so the page
+   keeps its scroll position while you compare. */
+document.querySelectorAll('.seg button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    tint = btn.dataset.tint;
+    document.querySelectorAll('.seg button').forEach(b =>
+      b.setAttribute('aria-pressed', String(b === btn)));
+    document.querySelectorAll('.screen').forEach(s => s.dataset.tint = tint);
+  });
+});
+</script>

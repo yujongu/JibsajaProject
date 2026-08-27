@@ -1,0 +1,580 @@
+<title>Split Block Layouts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Roboto:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0&icon_names=arrow_downward,delivery_dining,directions_car,event_repeat,flight,help,restaurant,swap_horiz,trending_down,trending_up">
+
+<style>
+/* ============================================================
+   Round three. Chrome unchanged from rounds one and two — the
+   page stays monochrome so every coloured pixel is the app's.
+   ============================================================ */
+:root {
+  --bg:#E9EAEE; --panel:#FCFCFD; --sunk:#DFE1E7;
+  --ink:#16171C; --ink-2:#575A64; --ink-3:#8B8E99;
+  --rule:#D0D2DA; --rule-2:#BEC1CB; --chip:#FFFFFF;
+  --shadow: 0 1px 2px rgba(20,22,30,.05), 0 8px 24px -12px rgba(20,22,30,.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0F1014; --panel:#181A20; --sunk:#131419;
+    --ink:#ECEDF1; --ink-2:#9CA0AB; --ink-3:#6A6E79;
+    --rule:#272A32; --rule-2:#343843; --chip:#22242C;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0F1014; --panel:#181A20; --sunk:#131419;
+  --ink:#ECEDF1; --ink-2:#9CA0AB; --ink-3:#6A6E79;
+  --rule:#272A32; --rule-2:#343843; --chip:#22242C;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+h1, h2, h3 {
+  font-family: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
+  font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: -0.02em;
+}
+.eyebrow {
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px;
+  font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3);
+}
+code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: .86em; color: var(--ink-2);
+}
+
+.masthead { padding: 68px 0 36px; }
+.masthead h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.04; max-width: 17ch; }
+.masthead .lede { margin: 20px 0 0; max-width: 64ch; font-size: 17px; color: var(--ink-2); }
+.masthead .eyebrow { margin-bottom: 14px; }
+
+/* ---------- sticky bar ---------- */
+.bar {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  margin-bottom: 52px;
+}
+.bar .wrap { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.bar ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 2px; overflow-x: auto; }
+.bar ol a {
+  display: block; padding: 12px 11px; font-size: 13px; font-weight: 500;
+  white-space: nowrap; color: var(--ink-2); text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.bar ol a:hover, .bar ol a:focus-visible { color: var(--ink); border-bottom-color: var(--rule-2); }
+.bar ol .num { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-3); margin-right: 6px; }
+
+.tintctl { margin-left: auto; display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.tintctl .lbl {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3);
+}
+.seg { display: flex; background: var(--sunk); border: 1px solid var(--rule); border-radius: 8px; padding: 2px; gap: 2px; }
+.seg button {
+  font: inherit; font-size: 12.5px; font-weight: 500; padding: 4px 12px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--ink-2); cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--chip); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+/* ---------- study block ---------- */
+.study { padding-bottom: 72px; }
+.study + .study { border-top: 1px solid var(--rule); padding-top: 52px; }
+.grid { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; gap: 40px; align-items: start; }
+.spec { position: sticky; top: 82px; }
+.spec h2 { font-size: 25px; line-height: 1.15; margin-bottom: 4px; }
+.spec .num {
+  font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 500;
+  color: var(--ink-3); display: block; margin-bottom: 10px;
+}
+.spec p { margin: 14px 0 0; font-size: 14.5px; color: var(--ink-2); }
+.facts { margin: 22px 0 0; border-top: 1px solid var(--rule); }
+.facts div {
+  display: grid; grid-template-columns: 76px 1fr; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 13px; line-height: 1.45;
+}
+.facts dt {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3); margin: 2px 0 0;
+}
+.facts dd { margin: 0; color: var(--ink-2); }
+
+/* ---------- frames ---------- */
+.frames { display: flex; gap: 22px; flex-wrap: wrap; }
+.frame-col { flex: 1 1 300px; min-width: 280px; max-width: 372px; }
+.frame-label {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); margin-bottom: 9px;
+  display: flex; gap: 8px; align-items: center;
+}
+.frame-label::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+.frame { border-radius: 26px; padding: 9px; background: var(--sunk); border: 1px solid var(--rule); box-shadow: var(--shadow); }
+.screen {
+  border-radius: 18px; padding: 12px; overflow: hidden;
+  font-family: Roboto, "Noto Sans KR", system-ui, sans-serif;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* ============================================================
+   Mockup tokens — values copied from app_colors.dart.
+   --tint  : the card body wash
+   --tint2 : the identity block, one step deeper
+   ============================================================ */
+.screen.light { background:#F8F9FB; --card:#FFFFFF; --bd:#C2C6D8; --t1:#191C1E; --t2:#424656; --t3:#737687; }
+.screen.dark  { background:#080D1A; --card:#131D30; --bd:#1E2D47; --t1:#F1F5F9; --t2:#94A3B8; --t3:#4B5E7A; }
+
+.screen.light[data-tint="subtle"] { --tint:5%;  --tint2:10%; }
+.screen.light[data-tint="medium"] { --tint:9%;  --tint2:18%; }
+.screen.light[data-tint="strong"] { --tint:15%; --tint2:28%; }
+.screen.dark[data-tint="subtle"]  { --tint:9%;  --tint2:16%; }
+.screen.dark[data-tint="medium"]  { --tint:15%; --tint2:26%; }
+.screen.dark[data-tint="strong"]  { --tint:24%; --tint2:38%; }
+
+.ms {
+  font-family: "Material Symbols Rounded"; font-weight: normal; font-style: normal;
+  line-height: 1; letter-spacing: normal; text-transform: none;
+  display: inline-block; white-space: nowrap; direction: ltr;
+  font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 1;
+}
+
+/* ---- shared split-block scaffolding ---- */
+.row {
+  display: flex; align-items: stretch; gap: 0; padding: 0;
+  border-radius: 14px; overflow: hidden;
+  background: color-mix(in srgb, var(--c) var(--tint), var(--card));
+}
+.zone {
+  background: color-mix(in srgb, var(--c) var(--tint2), var(--card));
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex-shrink: 0; gap: 3px; padding: 10px 4px;
+}
+.zone .ms { font-size: 20px; color: var(--c); }
+.zone .lab {
+  font-size: 9px; font-weight: 700; letter-spacing: .03em;
+  text-transform: uppercase; color: var(--c); text-align: center;
+}
+.body { flex: 1; min-width: 0; padding: 12px 12px 12px 14px; align-self: center; }
+.title {
+  font-size: 14px; font-weight: 600; color: var(--t1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sub {
+  font-size: 12px; color: var(--t2); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kicker {
+  font-size: 10px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--c); margin-bottom: 1px;
+}
+.right { align-self: center; text-align: right; flex-shrink: 0; padding: 12px 14px 12px 6px; }
+.amt { font-size: 14px; font-weight: 700; color: var(--t1); font-variant-numeric: tabular-nums; }
+
+/* L1 — wide block, label wraps to two lines */
+.L1 .zone { width: 88px; padding: 10px 6px; }
+.L1 .zone .lab { white-space: normal; line-height: 1.2; word-break: keep-all; }
+
+/* L2 — icon-only rail, label moves into the body */
+.L2 .zone { width: 46px; }
+
+/* L3 — vertical label running up the block */
+.L3 { min-height: 68px; }
+.L3 .zone { width: 36px; flex-direction: row; gap: 0; padding: 8px 0; }
+.L3 .zone .stackv { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.L3 .zone .lab {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  max-height: 46px; overflow: hidden; letter-spacing: .06em;
+}
+
+/* L4 — the block carries the date, the body carries the category */
+.L4 .zone { width: 54px; gap: 0; }
+.L4 .zone .day {
+  font-size: 19px; font-weight: 700; color: var(--c); line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.L4 .zone .mon {
+  font-size: 9px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--c); opacity: .8; margin-top: 3px;
+}
+
+/* L5 — horizontal split: tinted strip on top, content below */
+.L5 { flex-direction: column; align-items: stretch; }
+.L5 .strip {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--c) var(--tint2), var(--card));
+}
+.L5 .strip .ms { font-size: 15px; color: var(--c); }
+.L5 .strip .lab {
+  font-size: 10px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--c);
+}
+.L5 .strip .when { margin-left: auto; font-size: 10.5px; font-weight: 600; color: var(--t3); }
+.L5 .lower { display: flex; align-items: center; }
+.L5 .body { padding: 9px 12px 11px 12px; }
+.L5 .right { padding: 9px 12px 11px 6px; }
+
+/* L6 — bookends: both edges tinted, text on plain card */
+.L6 { background: var(--card); }
+.L6 .zone { width: 62px; }
+.L6 .money {
+  background: color-mix(in srgb, var(--c) var(--tint), var(--card));
+  display: flex; align-items: center; padding: 12px 14px; flex-shrink: 0;
+}
+.L6 .money .amt { color: var(--t1); }
+
+/* ---------- comparison ---------- */
+.compare { border-top: 1px solid var(--rule); padding: 52px 0 40px; }
+.tablewrap { overflow-x: auto; margin-top: 24px; }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13.5px; }
+th, td { text-align: left; padding: 13px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+thead th {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-3); font-weight: 500;
+  border-bottom: 1px solid var(--rule-2);
+}
+tbody th { font-weight: 600; color: var(--ink); white-space: nowrap; }
+tbody th .n { font-family: "IBM Plex Mono", monospace; color: var(--ink-3); font-size: 11px; margin-right: 6px; }
+td { color: var(--ink-2); }
+.mark { font-weight: 700; color: var(--ink); }
+
+.notes { padding-bottom: 84px; }
+.notes h2 { font-size: 22px; margin-bottom: 8px; }
+.notecards { display: grid; gap: 16px; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+.note { background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; padding: 18px 18px 20px; }
+.note h3 { font-size: 15px; margin-bottom: 6px; letter-spacing: -0.01em; }
+.note p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+
+footer { border-top: 1px solid var(--rule); padding: 26px 0 60px; font-size: 12.5px; color: var(--ink-3); }
+a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: 1fr; gap: 26px; }
+  .spec { position: static; }
+  .tintctl { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+html { scroll-behavior: smooth; }
+</style>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Jibsaja · Transactions tab · Round three</p>
+    <h1>Six ways to cut the split block</h1>
+    <p class="lede">
+      Two tint steps with a hard edge between them — that part is settled, and everything below is
+      shown at <strong>Strong</strong> by default. What's left is where the cut falls and what the
+      deeper zone holds. Four of the six drop the truncated <em>배달음식</em> that spoiled the
+      68px block: two by giving the label more room, two by moving it out of the block entirely.
+    </p>
+  </div>
+</header>
+
+<nav class="bar" aria-label="Layouts and tint strength">
+  <div class="wrap">
+    <ol>
+      <li><a href="#L1"><span class="num">1</span>Wide block</a></li>
+      <li><a href="#L2"><span class="num">2</span>Icon rail</a></li>
+      <li><a href="#L3"><span class="num">3</span>Vertical label</a></li>
+      <li><a href="#L4"><span class="num">4</span>Date block</a></li>
+      <li><a href="#L5"><span class="num">5</span>Top strip</a></li>
+      <li><a href="#L6"><span class="num">6</span>Bookends</a></li>
+      <li><a href="#compare"><span class="num">··</span>Compare</a></li>
+    </ol>
+    <div class="tintctl">
+      <span class="lbl" id="tintlbl">Tint</span>
+      <div class="seg" role="group" aria-labelledby="tintlbl">
+        <button type="button" data-tint="subtle" aria-pressed="false">Subtle</button>
+        <button type="button" data-tint="medium" aria-pressed="false">Medium</button>
+        <button type="button" data-tint="strong" aria-pressed="true">Strong</button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap" id="studies"></main>
+
+<section class="compare wrap" id="compare">
+  <p class="eyebrow">Compare</p>
+  <h2>Where each cut pays and where it costs</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Layout</th>
+          <th scope="col">Block holds</th>
+          <th scope="col">배달음식 fits</th>
+          <th scope="col">Colour area</th>
+          <th scope="col">Row height</th>
+          <th scope="col">Text starts at</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row"><span class="n">1</span>Wide block</th>
+          <td>Icon + label, two lines</td>
+          <td><span class="mark">Yes</span> — wraps</td>
+          <td>Largest side block</td>
+          <td>Unchanged</td>
+          <td>102px in</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">2</span>Icon rail</th>
+          <td>Icon only</td>
+          <td><span class="mark">Yes</span> — label is in the body</td>
+          <td>Smallest</td>
+          <td>Unchanged</td>
+          <td>60px in</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">3</span>Vertical label</th>
+          <td>Icon + rotated label</td>
+          <td><span class="mark">Yes</span> — runs vertically</td>
+          <td>Narrow, full height</td>
+          <td>+6px (min 68px)</td>
+          <td>50px in</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">4</span>Date block</th>
+          <td>Day number + month</td>
+          <td>N/A — label is in the body</td>
+          <td>Medium</td>
+          <td>Unchanged</td>
+          <td>68px in</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">5</span>Top strip</th>
+          <td>Icon + label + date, full width</td>
+          <td><span class="mark">Yes</span> — full row width</td>
+          <td>Widest band</td>
+          <td><span class="mark">+18px</span></td>
+          <td>12px in</td>
+        </tr>
+        <tr>
+          <th scope="row"><span class="n">6</span>Bookends</th>
+          <td>Icon + label; amount gets its own zone</td>
+          <td>Tight — 62px</td>
+          <td>Both edges</td>
+          <td>Unchanged</td>
+          <td>76px in</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="notes wrap">
+  <p class="eyebrow">Reading the mockups</p>
+  <h2>What to look for</h2>
+  <div class="notecards">
+    <div class="note">
+      <h3>The left edge is the scan line</h3>
+      <p>
+        Run your eye straight down the left edge of each frame without reading. Layouts 1 and 3
+        give that edge the most continuous colour; layout 5 breaks it, because the band sits at
+        the top of each card instead of the side. If category-first scanning is the goal, that
+        difference matters more than anything inside the row.
+      </p>
+    </div>
+    <div class="note">
+      <h3>Text indent is a real cost</h3>
+      <p>
+        Every pixel of block is a pixel the description loses. On a 360px phone, layout 1 starts
+        the title 102px in and <em>스타벅스 아메리카노</em> is already clipping; layout 2 starts
+        it at 60px and nothing clips. Check the longest titles, not the short ones.
+      </p>
+    </div>
+    <div class="note">
+      <h3>Trade rows still read flat</h3>
+      <p>
+        Unchanged from round two: Buy <code>#0055B2</code> and Deposit <code>#059669</code> are
+        single constants with no dark variant, so even at Strong their blocks barely lift off the
+        navy card. Fixing <code>_typeColor</code> to use light/dark pairs is a small edit worth
+        making alongside whichever layout wins.
+      </p>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap">
+  Colours from <code>app_colors.dart</code> and <code>transaction_category_ui.dart</code>; row
+  semantics from <code>docs/data/sheets.md</code>. Earlier rounds:
+  <code>docs/design/transaction-row-options.html</code> and
+  <code>docs/design/transaction-row-tinted.html</code>.
+</footer>
+
+<script>
+const CATS = {
+  food:      { label: '식비',     icon: 'restaurant',      l: '#EA580C', d: '#FB923C' },
+  delivery:  { label: '배달음식', icon: 'delivery_dining', l: '#CA8A04', d: '#FACC15' },
+  transport: { label: '교통',     icon: 'directions_car',  l: '#0284C7', d: '#38BDF8' },
+  monthly:   { label: 'Monthly',  icon: 'event_repeat',    l: '#4F46E5', d: '#818CF8' },
+  travel:    { label: '여행',     icon: 'flight',          l: '#0D9488', d: '#2DD4BF' },
+};
+const TYPES = {
+  deposit:  { label: 'Deposit',  icon: 'arrow_downward', l: '#059669', d: '#059669' },
+  buy:      { label: 'Buy',      icon: 'trending_up',    l: '#0055B2', d: '#0055B2' },
+  sell:     { label: 'Sell',     icon: 'trending_down',  l: '#F59E0B', d: '#F59E0B' },
+  transfer: { label: 'Transfer', icon: 'swap_horiz',     l: '#0891B2', d: '#0891B2' },
+  dividend: { label: 'Dividend', icon: 'help',           l: '#737687', d: '#737687' },
+};
+
+/* Same eleven rows as rounds one and two. `day`/`mon` are split out for the
+   date-block layout; the others keep rendering the full date string. */
+const ROWS = [
+  { cat:'food',      title:'점심 김밥천국',       account:'신한카드',       date:'Aug 24, 2026', day:24, mon:'Aug', amount:'-₩12,000' },
+  { cat:'delivery',  title:'쿠팡이츠 저녁',       account:'신한카드',       date:'Aug 24, 2026', day:24, mon:'Aug', amount:'-₩23,500' },
+  { cat:'food',      title:'스타벅스 아메리카노', account:'신한카드',       date:'Aug 23, 2026', day:23, mon:'Aug', amount:'-₩6,800' },
+  { cat:'transport', title:'Uber to SFO',         account:'Chase',          date:'Aug 22, 2026', day:22, mon:'Aug', amount:'-$38.40' },
+  { cat:'monthly',   title:'Netflix',             account:'Chase',          date:'Aug 21, 2026', day:21, mon:'Aug', amount:'-$15.49' },
+  { cat:'travel',    title:'Hotel Osaka',         account:'Chase',          date:'Aug 21, 2026', day:21, mon:'Aug', amount:'-$212.00' },
+  { type:'deposit',  title:'Paycheck',            account:'BoA',            date:'Aug 20, 2026', day:20, mon:'Aug', amount:'+$3,250.00' },
+  { type:'buy',      title:'AAPL',                account:'Robinhood',      date:'Aug 19, 2026', day:19, mon:'Aug', amount:'$2,274.00', meta:'10 @ 227.4' },
+  { type:'transfer', title:'Buy AAPL',            account:'Robinhood Cash', date:'Aug 19, 2026', day:19, mon:'Aug', amount:'-$2,274.00' },
+  { type:'sell',     title:'NVDA',                account:'Robinhood',      date:'Aug 18, 2026', day:18, mon:'Aug', amount:'-$472.80', meta:'-4 @ 118.2' },
+  { type:'dividend', title:'AAPL dividend',       account:'Robinhood',      date:'Aug 17, 2026', day:17, mon:'Aug', amount:'$8.10' },
+];
+
+function facet(r, dark) {
+  const s = r.cat ? CATS[r.cat] : TYPES[r.type];
+  return { label: s.label, icon: s.icon, color: dark ? s.d : s.l };
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+const sub  = (r) => [r.account, r.date, r.meta].filter(Boolean).map(esc).join(' · ');
+/* Layouts that surface the date elsewhere drop it from the subtitle. */
+const subNoDate = (r) => [r.account, r.meta].filter(Boolean).map(esc).join(' · ');
+const icon = (n) => `<span class="ms">${n}</span>`;
+const amt  = (r) => `<div class="right"><div class="amt">${esc(r.amount)}</div></div>`;
+
+/* ---------- layouts ---------------------------------------------------- */
+
+// 1 — 88px block; the label wraps instead of truncating.
+const L1 = (r, d) => { const f = facet(r, d); return `<div class="row L1" style="--c:${f.color}">
+  <div class="zone">${icon(f.icon)}<span class="lab">${esc(f.label)}</span></div>
+  <div class="body"><div class="title">${esc(r.title)}</div><div class="sub">${sub(r)}</div></div>
+  ${amt(r)}
+</div>`; };
+
+// 2 — 46px icon rail; the label becomes a kicker in the body.
+const L2 = (r, d) => { const f = facet(r, d); return `<div class="row L2" style="--c:${f.color}">
+  <div class="zone">${icon(f.icon)}</div>
+  <div class="body">
+    <div class="kicker">${esc(f.label)}</div>
+    <div class="title">${esc(r.title)}</div>
+    <div class="sub">${sub(r)}</div>
+  </div>
+  ${amt(r)}
+</div>`; };
+
+// 3 — 36px rail, label rotated to run up the block.
+const L3 = (r, d) => { const f = facet(r, d); return `<div class="row L3" style="--c:${f.color}">
+  <div class="zone"><span class="stackv">${icon(f.icon)}<span class="lab">${esc(f.label)}</span></span></div>
+  <div class="body"><div class="title">${esc(r.title)}</div><div class="sub">${sub(r)}</div></div>
+  ${amt(r)}
+</div>`; };
+
+// 4 — the block becomes the date; the category moves to the body kicker.
+const L4 = (r, d) => { const f = facet(r, d); return `<div class="row L4" style="--c:${f.color}">
+  <div class="zone"><span class="day">${r.day}</span><span class="mon">${esc(r.mon)}</span></div>
+  <div class="body">
+    <div class="kicker">${esc(f.label)}</div>
+    <div class="title">${esc(r.title)}</div>
+    <div class="sub">${subNoDate(r)}</div>
+  </div>
+  ${amt(r)}
+</div>`; };
+
+// 5 — the cut goes horizontal: a tinted strip across the top.
+const L5 = (r, d) => { const f = facet(r, d); return `<div class="row L5" style="--c:${f.color}">
+  <div class="strip">${icon(f.icon)}<span class="lab">${esc(f.label)}</span><span class="when">${esc(r.date)}</span></div>
+  <div class="lower">
+    <div class="body"><div class="title">${esc(r.title)}</div><div class="sub">${subNoDate(r)}</div></div>
+    ${amt(r)}
+  </div>
+</div>`; };
+
+// 6 — tinted at both ends, plain card under the text.
+const L6 = (r, d) => { const f = facet(r, d); return `<div class="row L6" style="--c:${f.color}">
+  <div class="zone">${icon(f.icon)}<span class="lab">${esc(f.label)}</span></div>
+  <div class="body"><div class="title">${esc(r.title)}</div><div class="sub">${sub(r)}</div></div>
+  <div class="money"><div class="amt">${esc(r.amount)}</div></div>
+</div>`; };
+
+const STUDIES = [
+  {
+    id:'L1', num:'01', name:'Wide block', render:L1,
+    blurb:`The same cut as before, widened to 88px so <em>배달음식</em> wraps to two lines rather than clipping. The most colour of any side-block layout and the most continuous left edge — but it pushes the title 102px into a 360px screen, and the long Korean descriptions start clipping instead.`,
+    facts:[['Fixes','Label truncation, by width'],['Costs','Title space — check 스타벅스 아메리카노'],['Best if','Category is what you scan and titles are short']],
+  },
+  {
+    id:'L2', num:'02', name:'Icon rail', render:L2,
+    blurb:`Strip the block back to the icon at 46px and let the <strong>category label live in the body</strong> as a coloured kicker. No label can ever truncate, the text gets the most room of any layout here, and the tint step still does the separating. The block is small enough that the colour reads as an edge rather than a panel.`,
+    facts:[['Fixes','Truncation, by moving the label out'],['Wins','Most room for titles; smallest indent'],['Costs','Category is no longer aligned in its own column']],
+  },
+  {
+    id:'L3', num:'03', name:'Vertical label', render:L3,
+    blurb:`A 36px rail with the label rotated to run up it. Narrow like the icon rail, but keeps the category in its own aligned column — the labels line up down the left edge as a colour-coded spine. Forces a 68px minimum row height, and vertical Korean is an unusual read.`,
+    facts:[['Fixes','Truncation, by rotating'],['Wins','Narrow rail plus an aligned label column'],['Costs','+6px height; rotated text is slower to read']],
+  },
+  {
+    id:'L4', num:'04', name:'Date block', render:L4,
+    blurb:`Make the block carry something the row doesn't already say twice: the day. The date leaves the crowded subtitle for a big tinted numeral, and the category takes the kicker slot. This is the only layout that <strong>adds information</strong> rather than relocating it — dates become scannable down the left edge.`,
+    facts:[['Fixes','A crowded subtitle line'],['Wins','Date is finally scannable; block never truncates'],['Costs','The icon leaves the block — hue is the only glyph cue']],
+  },
+  {
+    id:'L5', num:'05', name:'Top strip', render:L5,
+    blurb:`Turn the cut ninety degrees: a full-width tinted band across the top carrying icon, category and date, with the description and amount below. Every label fits at any length. It is the tallest option by 18px a row, and it breaks the continuous left edge that makes the side-block layouts scannable.`,
+    facts:[['Fixes','Truncation, permanently'],['Costs','+18px per row; no left-edge scan line'],['Best if','You want each row to read as its own small card']],
+  },
+  {
+    id:'L6', num:'06', name:'Bookends', render:L6,
+    blurb:`Tint both ends and leave the middle plain: the identity block on the left, a matching wash behind the amount on the right, and untinted card under the text. Money gets its own compartment, which makes amounts easier to compare down the column — at the cost of a busier row and a 62px block that still crowds long labels.`,
+    facts:[['Wins','Amounts read as their own column'],['Costs','Two tinted zones per row; label still tight'],['Watch','Reads heaviest of the six at Strong']],
+  },
+];
+
+/* ---------- build ------------------------------------------------------- */
+let tint = 'strong';
+
+const screen = (s, dark) =>
+  `<div class="frame"><div class="screen ${dark ? 'dark' : 'light'}" data-tint="${tint}">` +
+  ROWS.map(r => s.render(r, dark)).join('') + `</div></div>`;
+
+document.getElementById('studies').innerHTML = STUDIES.map(s => `
+  <section class="study" id="${s.id}">
+    <div class="grid">
+      <div class="spec">
+        <span class="num">${s.num}</span>
+        <h2>${s.name}</h2>
+        <p>${s.blurb}</p>
+        <dl class="facts">${s.facts.map(([k,v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
+      </div>
+      <div class="frames">
+        <div class="frame-col"><div class="frame-label">Light</div>${screen(s, false)}</div>
+        <div class="frame-col"><div class="frame-label">Dark</div>${screen(s, true)}</div>
+      </div>
+    </div>
+  </section>`).join('');
+
+/* Strength retargets an attribute on each screen — no re-render, so the page
+   holds its scroll position while you compare. */
+document.querySelectorAll('.seg button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    tint = btn.dataset.tint;
+    document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    document.querySelectorAll('.screen').forEach(s => s.dataset.tint = tint);
+  });
+});
+</script>
