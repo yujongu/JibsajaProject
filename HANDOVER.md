@@ -12,7 +12,8 @@ _Last updated: 2026-08-27_
 The old row spent its only text badge on the *type* ("Purchase" on every expense) and left the
 category to hue and glyph alone — 12 categories, 12 hues, no words. `TransactionTile` is now a
 category-tinted card split into a deeper identity block (icon over label) and the description,
-account, date and amount. Chosen from four rounds of HTML mockups in `docs/design/`.
+account, date and amount. Chosen from four rounds of HTML mockups, reviewed as Artifacts
+and not kept in the repo.
 
 Three decisions worth knowing before changing it:
 
@@ -33,7 +34,6 @@ Uncommitted:
 |---|---|
 | `lib/presentation/shared/widgets/transaction_tile.dart` | modified — the redesign |
 | `test/presentation/shared/widgets/transaction_tile_test.dart` | new — 12 tests, mutation-checked (see below) |
-| `docs/design/*.html` | new — the four mockup rounds, published as Artifacts |
 | `docs/gotchas.md` | modified — intl `TextDirection` trap, block-width behaviour, diverged `_typeColor`, the two text-scale traps below |
 
 Verified 2026-08-27, after the last source edit: `flutter analyze` **clean**, `flutter test`
@@ -91,5 +91,4 @@ Android device pass; the APK on disk predates all of this.
 | Scoped rules (Clean Architecture, Riverpod) | `.claude/rules/` |
 | Sheet schema & backend contract | `docs/data/sheets.md` |
 | Traps that still bite, and known dead code | `docs/gotchas.md` |
-| Row design explorations (HTML) | `docs/design/` |
 | Why past decisions were made | `docs/handover-archive.md` (closed 2026-08-15) |
