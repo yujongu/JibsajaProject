@@ -6,14 +6,41 @@ against the working tree, not carried forward on faith. If an entry stops being 
 Companions: [`data/sheets.md`](data/sheets.md) (the backend contract),
 [`handover-archive.md`](handover-archive.md) (why past decisions were made).
 
-## A blank Category cell is null, not Misc.
+## A blank Category cell is null, not Misc. — and `''` differs from `'   '`
 
-`TransactionCategoryX.fromSheet` falls back to `misc`, but `SheetTransactionModel.fromJson:58`
-never calls it for a blank cell — it maps empty/missing straight to `null`. So an expense with no
-Category arrives at the UI with `category == null`, and every consumer has to apply its own
-fallback. `TransactionTile` falls back to Misc. for hue, label **and** icon; before 2026-08-27 the
-icon alone did not, so those rows read as slate "MISC." with a shopping-bag glyph. Two rows in the
-real sheet (May 2026) hit this, which is how it was found.
+`TransactionCategoryX.fromSheet` falls back to `misc` for null/empty, but
+`SheetTransactionModel.fromJson:58` short-circuits in front of it:
+
+```dart
+category: category == null || category.toString().isEmpty
+    ? null
+    : TransactionCategoryX.fromSheet(category.toString()),
+```
+
+It is the only production caller, so `fromSheet`'s own null/empty arm is unreachable from the app.
+The consequence is that two cells that look identical in Sheets parse differently:
+
+| Cell | `tx.category` | why |
+| :-- | :-- | :-- |
+| `''` or absent | **null** | the guard short-circuits |
+| `'   '` | **misc** | `.isEmpty` is false, so `fromSheet` runs and trims |
+
+**This is currently invisible**, because every consumer coalesces the two:
+`_countsForCategory` (`transaction_summary.dart:162`) and `_Accumulator.add` (`:183`) both use
+`tx.category ?? misc`, and `TransactionTile` falls back to Misc. for hue, label and icon alike.
+The write path (`sheet_transaction_model.dart:116`, `logging_sheets_repository.dart:117`) uses
+`?? ''`, which round-trips a blank cell correctly — and the app only ever appends rows, never
+rewrites ones it read.
+
+**So the trap is for the next consumer.** Anything that branches on `category == null` — rather
+than coalescing — will treat a blank cell and a whitespace cell differently for no reason a user
+could see. Coalesce to `misc` like the other four do, or fix the guard in the model (which would
+change null → misc for *every* row type, put a category on Buy/Transfer rows that have no business
+carrying one, and break `sheet_transaction_model_test.dart:80` and `:103`, both of which assert
+`tx.category, isNull`).
+
+Two rows in the real sheet (May 2026) carry a blank Category. Before 2026-08-27 the tile's icon
+alone failed to coalesce, so they rendered as slate "MISC." with a shopping-bag glyph.
 
 ## Silent filter drops — the app's most dangerous failure mode
 
