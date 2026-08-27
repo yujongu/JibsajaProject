@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jibsaja/domain/entities/sheet_transaction.dart';
 import 'package:jibsaja/domain/entities/transaction_category.dart';
 import 'package:jibsaja/domain/entities/transaction_type.dart';
+import 'package:jibsaja/presentation/extensions/transaction_category_ui.dart';
 import 'package:jibsaja/presentation/shared/widgets/transaction_tile.dart';
 
 final _date = DateTime(2026, 8, 24);
@@ -318,4 +319,28 @@ void main() {
       expect((card.decoration as BoxDecoration).color, isNot(Colors.white));
     });
   });
+
+  testWidgets(
+    'an uncategorized expense falls back to Misc. in all three cues',
+    (tester) async {
+      // A blank Category cell arrives as null, not as misc — two rows in the
+      // real sheet do. Hue and label already fell back to Misc.; the icon used
+      // to stay a shopping bag, so the row read as MISC. with the wrong glyph.
+      await _pump(tester, [
+        SheetTransaction(
+          date: _date,
+          account: 'BoA',
+          type: TransactionType.purchase,
+          description: 'Lunch',
+          amount: -1200,
+        ),
+      ]);
+
+      expect(find.text('MISC.'), findsOneWidget);
+      expect(
+        tester.widget<Icon>(find.byType(Icon)).icon,
+        TransactionCategory.misc.icon,
+      );
+    },
+  );
 }

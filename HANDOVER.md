@@ -32,12 +32,12 @@ Uncommitted:
 | Path | What |
 |---|---|
 | `lib/presentation/shared/widgets/transaction_tile.dart` | modified — the redesign |
-| `test/presentation/shared/widgets/transaction_tile_test.dart` | new — 11 tests, mutation-checked (see below) |
+| `test/presentation/shared/widgets/transaction_tile_test.dart` | new — 12 tests, mutation-checked (see below) |
 | `docs/design/*.html` | new — the four mockup rounds, published as Artifacts |
 | `docs/gotchas.md` | modified — intl `TextDirection` trap, block-width behaviour, diverged `_typeColor`, the two text-scale traps below |
 
 Verified 2026-08-27, after the last source edit: `flutter analyze` **clean**, `flutter test`
-**254/254** (243 before this session + 11 new).
+**255/255** (243 before this session + 12 new).
 
 **Seen running** on an iOS simulator (iPhone 17 Pro, iOS 26.5) against the real sheet, July 2026.
 The width rule holds: blocks widen with the platform text size, stay uniform across rows, and stop

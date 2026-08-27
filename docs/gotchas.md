@@ -6,6 +6,15 @@ against the working tree, not carried forward on faith. If an entry stops being 
 Companions: [`data/sheets.md`](data/sheets.md) (the backend contract),
 [`handover-archive.md`](handover-archive.md) (why past decisions were made).
 
+## A blank Category cell is null, not Misc.
+
+`TransactionCategoryX.fromSheet` falls back to `misc`, but `SheetTransactionModel.fromJson:58`
+never calls it for a blank cell — it maps empty/missing straight to `null`. So an expense with no
+Category arrives at the UI with `category == null`, and every consumer has to apply its own
+fallback. `TransactionTile` falls back to Misc. for hue, label **and** icon; before 2026-08-27 the
+icon alone did not, so those rows read as slate "MISC." with a shopping-bag glyph. Two rows in the
+real sheet (May 2026) hit this, which is how it was found.
+
 ## Silent filter drops — the app's most dangerous failure mode
 
 Three places filter sheet rows by a literal string. In every one, **a blank, misspelled or
@@ -134,6 +143,7 @@ Recorded so it is findable in one place. None of it is a bug; do not delete it a
 - `_NetCaption` renders a zero net flow as `+0`
 - `AppColors.negative` is unreachable for purchase rows but must stay in `_typeColor`'s switch,
   which has to remain exhaustive over `TransactionType`. The analyzer does not flag it.
+  `_typeIcon`'s purchase arm is unreachable for the same reason and stays for the same reason.
 
 ## Dart / imports
 

@@ -166,8 +166,12 @@ class TransactionTile extends StatelessWidget {
         ? (cat ?? TransactionCategory.misc).label
         : (tx.rawType ?? tx.type.label);
 
-    // A purchase takes its category's glyph, like it takes its category's hue.
-    final icon = isPurchase && cat != null ? cat.icon : _typeIcon(tx.type);
+    // A purchase takes its category's glyph, hue and label — all three fall
+    // back to Misc. together, because a blank Category cell in the sheet
+    // arrives here as null rather than as misc (SheetTransactionModel:58).
+    final icon = isPurchase
+        ? (cat ?? TransactionCategory.misc).icon
+        : _typeIcon(tx.type);
 
     final title = _title(cat);
 
@@ -370,9 +374,11 @@ class TransactionTile extends StatelessWidget {
 /// The five type colors, as light/dark pairs like the twelve category hues
 /// already are. The dark value is the lighter of each pair — a single constant
 /// left Buy and Deposit sitting almost unreadably dark on the navy card.
-/// The type glyphs, as the theme-independent counterpart to [_typeColor]. The
-/// purchase entry is only reached by an expense the sheet left uncategorized —
-/// a categorized one draws its category's icon.
+/// The type glyphs, as the theme-independent counterpart to [_typeColor].
+///
+/// The purchase entry is unreachable — an expense always draws its category's
+/// icon, falling back to Misc. — but the switch has to stay exhaustive over
+/// [TransactionType], exactly like [_typeColor]'s purchase arm.
 IconData _typeIcon(TransactionType t) => switch (t) {
   TransactionType.purchase => Icons.shopping_bag_rounded,
   TransactionType.buy => Icons.trending_up_rounded,
