@@ -89,6 +89,10 @@ class CategoryDetailPage extends ConsumerWidget {
                           isDark: isDark,
                           currency:
                               currencies[SheetAccount.key(txs[i].account)],
+                          // Every row here is this one category, and the title
+                          // and header already say so — the block would stamp
+                          // the same icon and word down the whole list.
+                          showIdentity: false,
                         ),
                       ),
                     ),
@@ -134,10 +138,10 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = category.color(isDark);
-    final primary =
-        isDark ? AppColors.textPrimary : AppColors.textPrimaryLight;
-    final secondary =
-        isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+    final primary = isDark ? AppColors.textPrimary : AppColors.textPrimaryLight;
+    final secondary = isDark
+        ? AppColors.textSecondary
+        : AppColors.textSecondaryLight;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -199,10 +203,12 @@ class _TrendChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = category.color(isDark);
-    final trackColor =
-        isDark ? AppColors.darkBorder : AppColors.surfaceContainerLow;
-    final tertiary =
-        isDark ? AppColors.textTertiary : AppColors.textTertiaryLight;
+    final trackColor = isDark
+        ? AppColors.darkBorder
+        : AppColors.surfaceContainerLow;
+    final tertiary = isDark
+        ? AppColors.textTertiary
+        : AppColors.textTertiaryLight;
 
     // Scale to the tallest month in the window. An all-zero window would divide
     // by zero, and every bar is empty anyway.
@@ -241,13 +247,15 @@ class _TrendChart extends StatelessWidget {
                               // slot reads as "nothing here", not as missing.
                               height: peak == 0
                                   ? 2
-                                  : (point.amount / peak * _barHeight)
-                                      .clamp(2.0, _barHeight),
+                                  : (point.amount / peak * _barHeight).clamp(
+                                      2.0,
+                                      _barHeight,
+                                    ),
                               color: point.amount == 0
                                   ? trackColor
                                   : _isSelected(point.month)
-                                      ? color
-                                      : color.withValues(alpha: 0.35),
+                                  ? color
+                                  : color.withValues(alpha: 0.35),
                             ),
                           ),
                         ),
@@ -285,16 +293,17 @@ class _EmptyNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 32),
-        child: Center(
-          child: Text(
-            'No transactions in this category',
-            style: TextStyle(
-              fontSize: 13,
-              color:
-                  isDark ? AppColors.textSecondary : AppColors.textSecondaryLight,
-            ),
-          ),
+    padding: const EdgeInsets.symmetric(vertical: 32),
+    child: Center(
+      child: Text(
+        'No transactions in this category',
+        style: TextStyle(
+          fontSize: 13,
+          color: isDark
+              ? AppColors.textSecondary
+              : AppColors.textSecondaryLight,
         ),
-      );
+      ),
+    ),
+  );
 }

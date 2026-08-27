@@ -134,9 +134,18 @@ class TransactionTile extends StatelessWidget {
     required this.tx,
     required this.isDark,
     this.currency,
+    this.showIdentity = true,
   });
   final SheetTransaction tx;
   final bool isDark;
+
+  /// Whether to draw the identity block.
+  ///
+  /// False on a list already filtered to one category, where every row's block
+  /// would be the same icon and the same word — a fact the page states twice
+  /// above the list. The card keeps its tint; the description gets the room the
+  /// block would have taken.
+  final bool showIdentity;
 
   /// Currency code of [tx]'s account, or null when the sheet's `Accounts` tab
   /// does not name one.
@@ -214,10 +223,15 @@ class TransactionTile extends StatelessWidget {
         // wherever the list pads its rows — and is the only correct basis if
         // this tile ever lands in a pane or dialog.
         final cardWidth = constraints.maxWidth;
-        final blockWidth = math.min(
-          _measuredBlockWidth(MediaQuery.textScalerOf(context), metricsStyle),
-          cardWidth * _blockMaxShare,
-        );
+        final blockWidth = showIdentity
+            ? math.min(
+                _measuredBlockWidth(
+                  MediaQuery.textScalerOf(context),
+                  metricsStyle,
+                ),
+                cardWidth * _blockMaxShare,
+              )
+            : 0.0;
 
         return DecoratedBox(
           decoration: BoxDecoration(
@@ -237,70 +251,78 @@ class TransactionTile extends StatelessWidget {
               // pay for per row. Directional, so it tracks the Row beside it
               // rather than always hugging the physical left edge; its own
               // rounded start corners are what let the card drop its clip.
-              PositionedDirectional(
-                key: const ValueKey('block-ground'),
-                top: 0,
-                bottom: 0,
-                start: 0,
-                width: blockWidth,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: _wash(
-                      color,
-                      card,
-                      isDark ? _blockAlphaDark : _blockAlphaLight,
-                    ),
-                    borderRadius: const BorderRadiusDirectional.horizontal(
-                      start: Radius.circular(14),
+              if (showIdentity)
+                PositionedDirectional(
+                  key: const ValueKey('block-ground'),
+                  top: 0,
+                  bottom: 0,
+                  start: 0,
+                  width: blockWidth,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: _wash(
+                        color,
+                        card,
+                        isDark ? _blockAlphaDark : _blockAlphaLight,
+                      ),
+                      borderRadius: const BorderRadiusDirectional.horizontal(
+                        start: Radius.circular(14),
+                      ),
                     ),
                   ),
                 ),
-              ),
               Row(
                 children: [
-                  SizedBox(
-                    width: blockWidth,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: _blockPad,
-                        vertical: 10,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            switch (tx.type) {
-                              TransactionType.purchase =>
-                                cat?.icon ?? Icons.shopping_bag_rounded,
-                              TransactionType.buy => Icons.trending_up_rounded,
-                              TransactionType.sell =>
-                                Icons.trending_down_rounded,
-                              TransactionType.transfer =>
-                                Icons.swap_horiz_rounded,
-                              TransactionType.deposit =>
-                                Icons.arrow_downward_rounded,
-                              TransactionType.unknown =>
-                                Icons.help_outline_rounded,
-                            },
-                            size: 20,
-                            color: color,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            label.toUpperCase(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: labelStyle,
-                          ),
-                        ],
+                  if (showIdentity)
+                    SizedBox(
+                      width: blockWidth,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: _blockPad,
+                          vertical: 10,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              switch (tx.type) {
+                                TransactionType.purchase =>
+                                  cat?.icon ?? Icons.shopping_bag_rounded,
+                                TransactionType.buy =>
+                                  Icons.trending_up_rounded,
+                                TransactionType.sell =>
+                                  Icons.trending_down_rounded,
+                                TransactionType.transfer =>
+                                  Icons.swap_horiz_rounded,
+                                TransactionType.deposit =>
+                                  Icons.arrow_downward_rounded,
+                                TransactionType.unknown =>
+                                  Icons.help_outline_rounded,
+                              },
+                              size: 20,
+                              color: color,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              label.toUpperCase(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: labelStyle,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(13, 12, 10, 12),
+                      padding: EdgeInsets.fromLTRB(
+                        showIdentity ? 13 : 14,
+                        12,
+                        10,
+                        12,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

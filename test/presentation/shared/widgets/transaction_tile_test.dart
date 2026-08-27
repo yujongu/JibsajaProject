@@ -35,6 +35,7 @@ Future<void> _pump(
   double textScale = 1.0,
   Size size = const Size(360, 800),
   String? currency,
+  bool showIdentity = true,
 }) async {
   // The widget tree lays out against the *view*, not MediaQuery.size — without
   // this the row is 800px wide however small the MediaQuery says the phone is,
@@ -53,7 +54,12 @@ Future<void> _pump(
           body: Column(
             children: [
               for (final tx in txs)
-                TransactionTile(tx: tx, isDark: false, currency: currency),
+                TransactionTile(
+                  tx: tx,
+                  isDark: false,
+                  currency: currency,
+                  showIdentity: showIdentity,
+                ),
             ],
           ),
         ),
@@ -259,5 +265,59 @@ void main() {
         }
       });
     }
+  });
+
+  group('showIdentity: false', () {
+    // The category detail page is already filtered to one category, so a block
+    // on every row would repeat the same icon and word down the whole list.
+    testWidgets('draws no block, and no label to repeat', (tester) async {
+      await _pump(tester, [
+        _purchase(TransactionCategory.food),
+      ], showIdentity: false);
+
+      expect(find.byKey(const ValueKey('block-ground')), findsNothing);
+      expect(find.text('식비'), findsNothing);
+      expect(find.text('Lunch'), findsOneWidget);
+    });
+
+    testWidgets('gives the width back to the description', (tester) async {
+      await _pump(tester, [_purchase(TransactionCategory.food)]);
+      final withBlock = tester
+          .getSize(
+            find
+                .ancestor(of: find.text('Lunch'), matching: find.byType(Column))
+                .first,
+          )
+          .width;
+
+      await _pump(tester, [
+        _purchase(TransactionCategory.food),
+      ], showIdentity: false);
+      final without = tester
+          .getSize(
+            find
+                .ancestor(of: find.text('Lunch'), matching: find.byType(Column))
+                .first,
+          )
+          .width;
+
+      expect(without, greaterThan(withBlock));
+    });
+
+    testWidgets('keeps the category tint on the card', (tester) async {
+      await _pump(tester, [
+        _purchase(TransactionCategory.food),
+      ], showIdentity: false);
+
+      final card = tester.widget<DecoratedBox>(
+        find
+            .ancestor(
+              of: find.text('Lunch'),
+              matching: find.byType(DecoratedBox),
+            )
+            .last,
+      );
+      expect((card.decoration as BoxDecoration).color, isNot(Colors.white));
+    });
   });
 }

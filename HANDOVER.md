@@ -32,12 +32,12 @@ Uncommitted:
 | Path | What |
 |---|---|
 | `lib/presentation/shared/widgets/transaction_tile.dart` | modified — the redesign |
-| `test/presentation/shared/widgets/transaction_tile_test.dart` | new — 8 tests, mutation-checked (see below) |
+| `test/presentation/shared/widgets/transaction_tile_test.dart` | new — 11 tests, mutation-checked (see below) |
 | `docs/design/*.html` | new — the four mockup rounds, published as Artifacts |
 | `docs/gotchas.md` | modified — intl `TextDirection` trap, block-width behaviour, diverged `_typeColor`, the two text-scale traps below |
 
 Verified 2026-08-27, after the last source edit: `flutter analyze` **clean**, `flutter test`
-**251/251** (243 before this session + 8 new).
+**254/254** (243 before this session + 11 new).
 
 **Seen running** on an iOS simulator (iPhone 17 Pro, iOS 26.5) against the real sheet, July 2026.
 The width rule holds: blocks widen with the platform text size, stay uniform across rows, and stop
@@ -65,7 +65,10 @@ set, and taking the first label instead of the widest each fail it. The same rev
 block ground was painted with `Positioned(left:)` behind a directional `Row`, which put it on the
 wrong side under RTL; it is now `PositionedDirectional`.
 
-Still unseen: `category_detail_page.dart:87`, which shares the tile.
+`category_detail_page.dart` shares the tile and was checked on the simulator too: it is filtered
+to one category, so every row's block repeated the same icon and word — a fact the page's title
+and header already state. It now passes `showIdentity: false`, keeping the tint and giving the
+description the block's width back.
 
 ## Next Immediate Step
 
