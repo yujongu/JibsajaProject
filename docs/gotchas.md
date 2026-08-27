@@ -41,6 +41,21 @@ error. A user reporting "my position is missing" is almost always looking at thi
   level. If a test ever needs the rendered "3m ago", the lever is injecting the ticker.
 - **`find.byType(UpdatedAtLabel)` needs `skipOffstage: false`** — with a null time it builds
   `SizedBox.shrink()`, and the default finder skips a zero-size widget even though it is mounted.
+- **A module-level memo makes widget tests read each other's numbers.** `transaction_tile.dart`
+  caches its block measurement globally; two `_pump` calls in one test both hit it, so a
+  before/after comparison holds however the width was derived. `transaction_tile_test.dart` calls
+  `resetBlockWidthCache()` in `setUp` and between paired pumps.
+- **`didExceedMaxLines` does not detect a horizontally ellipsized label.** A single unbreakable
+  word (`TRANSFER`) fits on one line and gets clipped, so maxLines is never exceeded. Compare
+  `RenderParagraph.size.width` against `getMaxIntrinsicWidth(double.infinity)` instead.
+- **`Color.computeLuminance()` makes contrast assertable in a widget test** — read the rendered
+  `Text.style.color` and the `ColoredBox.color` behind it and compare. Used in
+  `transaction_tile_test.dart`; cheaper than a golden and it says *why* it failed.
+- **A widget test lays out against the *view*, not `MediaQuery.size`.** Passing a
+  `MediaQueryData(size: Size(360, 800))` changes what the widget *reads* but leaves the tree
+  laid out at the 800x600 test view, so nothing ever runs out of horizontal room and an
+  overflow test silently passes. Use `tester.binding.setSurfaceSize(...)` (with a teardown
+  resetting it to null) — see `transaction_tile_test.dart`.
 - **Several widget tests disambiguate by size, not identity** — `fontSize == 28` for a section
   total, `size == 20` for a tile icon (the summary card draws the same `IconData` at 14px). Change
   the type scale and these fail with "expected 1 element" rather than anything descriptive.
@@ -57,6 +72,33 @@ error. A user reporting "my position is missing" is almost always looking at thi
   change to the card's content changes that animation. With the category cap removed its worst
   case is 12 bars. If the transition reads badly, the lever is the `AnimatedSize` duration/curve,
   **not** re-adding the cap.
+- **A label drawn in the same hue as the surface behind it loses most of its contrast.** The
+  transaction row's block label started at 1.73:1 (Sell, light) to 4.2:1 across all 17 labels —
+  worse than the old badge, which sat on a plain card (식비 dark went 7.45 → 3.53). It is now
+  mixed 45% toward the theme's text colour (`_labelInkMix`), which lands every label above 4:1 in
+  both themes; the icon keeps the pure hue. `transaction_tile_test.dart` asserts the ratio for
+  every label — twelve categories **and** the type labels, which are the binding cases (Sell
+  4.20 light, Transfer 4.60 dark) — in both themes, finding the block by
+  `ValueKey('block-ground')`. An earlier version found it by `ColoredBox` index and measured the
+  *body* wash instead, which passes even with the block painted in the raw hue.
+- **The transaction row's identity block has no fixed width.** `transaction_tile.dart` measures
+  the widest of the 16 labels it can ever hold (12 categories + Deposit/Buy/Sell/Transfer) at the
+  current `TextScaler` and uses that for every row, so the blocks stay aligned and the block
+  follows the platform text-size setting. Two consequences: an **unrecognized** `Type` is
+  deliberately excluded from the measured set — it shows the sheet's own wording, which could be
+  any length, and ellipsizes rather than widening every row of the month; and the result is
+  memoized in **module-level** `_widthCacheKey`/`_widthCacheValue`, keyed on scaled font size plus
+  family, so it is shared across every tile and across tests in one process.
+- **Non-flex Row children starve the `Expanded` one at accessibility text scales.** The
+  transaction row's amount is not flexible, so at ~3x it took its full intrinsic width
+  (`₩-10,688,000` is very wide) and squeezed the description to zero — a `RenderFlex overflowed
+  by 285 pixels`. It is now bounded by `_amountMaxShare` and ellipsizes. The same shape exists
+  elsewhere in the app and has not been audited.
+- **The summary card and the bottom nav bar overflow at accessibility text scales.**
+  `_SummaryHeader` overflows right, and `main.dart`'s `_BottomNav` has a fixed
+  `SizedBox(height: 60)` that overflows by ~112px with the labels wrapping. Both pre-date the
+  row redesign; both were visible on an iOS simulator at
+  `accessibility-extra-extra-extra-large` on 2026-08-27.
 - **`accountIdentityColor` has only 6 hues**, so a section with 7+ positions repeats colors in the
   stacked bar. It is shared with the account monograms — widening `_identityColors` changes those
   too.
@@ -80,7 +122,10 @@ Recorded so it is findable in one place. None of it is a bug; do not delete it a
 
 - `groupByMonth()` + `MonthGroup` in `transaction_summary.dart` — one reference, its own definition
 - `lib/presentation/shared/utils/currency_formatter.dart` — zero references
-- `_typeColor` defined twice: `transaction_tile.dart:157` and `add_transaction_sheet.dart:463`
+- `_typeColor` defined twice, and the copies have **diverged**: `transaction_tile.dart:304` takes
+  `isDark` and returns light/dark pairs, `add_transaction_sheet.dart:463` still returns one
+  constant per type. The form's copy is only ever drawn on a sheet, so it has not been touched —
+  but they are no longer interchangeable
 - `_SectionLabel` defined three times: `settings_page.dart:278`, `dashboard_page.dart:649`,
   `accounts_page.dart:170`
 - `add_transaction_sheet.dart:467` uses a literal `Color(0xFFF59E0B)` that duplicates
@@ -89,6 +134,13 @@ Recorded so it is findable in one place. None of it is a bug; do not delete it a
 - `_NetCaption` renders a zero net flow as `+0`
 - `AppColors.negative` is unreachable for purchase rows but must stay in `_typeColor`'s switch,
   which has to remain exhaustive over `TransactionType`. The analyzer does not flag it.
+
+## Dart / imports
+
+- **`package:intl/intl.dart` exports its own `TextDirection`**, which shadows the one from
+  `dart:ui` that `material.dart` re-exports. Any file importing both and constructing a
+  `TextPainter` fails with *"The getter 'ltr' isn't defined for the type 'TextDirection'"*.
+  `transaction_tile.dart` imports intl as `hide TextDirection`; only `DateFormat` is needed there.
 
 ## Build
 
