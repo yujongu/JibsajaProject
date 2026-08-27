@@ -104,6 +104,16 @@ double _contrast(Color a, Color b) {
   );
 }
 
+/// Width of the description column — the `Column` holding the title and the
+/// account/date line. Every fixture here describes itself as 'Lunch'.
+double _descriptionWidth(WidgetTester tester) => tester
+    .getSize(
+      find
+          .ancestor(of: find.text('Lunch'), matching: find.byType(Column))
+          .first,
+    )
+    .width;
+
 void main() {
   // The measurement is memoized in a module-level cache, so without this a test
   // can silently re-read the previous test's number instead of measuring.
@@ -228,8 +238,8 @@ void main() {
     // The label is drawn on a block washed in its own hue, so the two colors
     // start out close. Mixing the label toward the theme's text color is what
     // keeps it readable rather than decorative.
-    for (final theme in [false, true]) {
-      final name = theme ? 'dark' : 'light';
+    for (final isDark in [false, true]) {
+      final name = isDark ? 'dark' : 'light';
       testWidgets('every label clears 4:1 on its own block ($name)', (
         tester,
       ) async {
@@ -250,7 +260,7 @@ void main() {
               home: MediaQuery(
                 data: const MediaQueryData(size: Size(360, 800)),
                 child: Scaffold(
-                  body: TransactionTile(tx: entry.value, isDark: theme),
+                  body: TransactionTile(tx: entry.value, isDark: isDark),
                 ),
               ),
             ),
@@ -282,24 +292,12 @@ void main() {
 
     testWidgets('gives the width back to the description', (tester) async {
       await _pump(tester, [_purchase(TransactionCategory.food)]);
-      final withBlock = tester
-          .getSize(
-            find
-                .ancestor(of: find.text('Lunch'), matching: find.byType(Column))
-                .first,
-          )
-          .width;
+      final withBlock = _descriptionWidth(tester);
 
       await _pump(tester, [
         _purchase(TransactionCategory.food),
       ], showIdentity: false);
-      final without = tester
-          .getSize(
-            find
-                .ancestor(of: find.text('Lunch'), matching: find.byType(Column))
-                .first,
-          )
-          .width;
+      final without = _descriptionWidth(tester);
 
       expect(without, greaterThan(withBlock));
     });

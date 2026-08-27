@@ -59,18 +59,12 @@ final List<String> _blockLabels = [
       t.label.toUpperCase(),
 ];
 
-TextScaler? _cachedScaler;
-TextStyle? _cachedStyle;
-double? _cachedWidth;
+({TextScaler scaler, TextStyle style, double width})? _blockWidthMemo;
 
 /// Drops the memo. Registered against [PaintingBinding.systemFonts] below, and
 /// exposed so tests do not inherit each other's measurement.
 @visibleForTesting
-void resetBlockWidthCache() {
-  _cachedScaler = null;
-  _cachedStyle = null;
-  _cachedWidth = null;
-}
+void resetBlockWidthCache() => _blockWidthMemo = null;
 
 /// Inter is fetched over the network by `google_fonts` — nothing is bundled —
 /// so the first measurements run against a fallback face with different
@@ -103,7 +97,10 @@ void _watchSystemFonts() {
 /// and family without listing them by hand.
 double _measuredBlockWidth(TextScaler scaler, TextStyle style) {
   _watchSystemFonts();
-  if (scaler == _cachedScaler && style == _cachedStyle) return _cachedWidth!;
+  final memo = _blockWidthMemo;
+  if (memo != null && memo.scaler == scaler && memo.style == style) {
+    return memo.width;
+  }
 
   var widest = 0.0;
   for (final label in _blockLabels) {
@@ -115,9 +112,9 @@ double _measuredBlockWidth(TextScaler scaler, TextStyle style) {
     widest = math.max(widest, painter.width);
   }
 
-  _cachedScaler = scaler;
-  _cachedStyle = style;
-  return _cachedWidth = widest + 2 * _blockPad;
+  final width = widest + 2 * _blockPad;
+  _blockWidthMemo = (scaler: scaler, style: style, width: width);
+  return width;
 }
 
 Color _wash(Color hue, Color surface, double alpha) =>
@@ -158,7 +155,7 @@ class TransactionTile extends StatelessWidget {
     // A purchase is colored by its category, not by its type — otherwise every
     // expense on screen is the same red. Uncategorized rows fall back to Misc.,
     // which is where the month summary buckets them too.
-    final color = isPurchase
+    final hue = isPurchase
         ? (cat ?? TransactionCategory.misc).color(isDark)
         : _typeColor(tx.type, isDark);
 
@@ -169,27 +166,10 @@ class TransactionTile extends StatelessWidget {
         ? (cat ?? TransactionCategory.misc).label
         : (tx.rawType ?? tx.type.label);
 
-    final title = switch (tx.type) {
-      TransactionType.purchase =>
-        tx.description.isNotEmpty ? tx.description : (cat?.label ?? 'Purchase'),
-      // Transfer rows carry no ticker; show their note (the trade description).
-      TransactionType.transfer =>
-        tx.description.isNotEmpty ? tx.description : 'Transfer',
-      TransactionType.deposit =>
-        tx.description.isNotEmpty ? tx.description : 'Deposit',
-      TransactionType.unknown =>
-        tx.description.isNotEmpty
-            ? tx.description
-            : (tx.rawType ?? tx.type.label),
-      _ => tx.ticker ?? tx.type.label,
-    };
+    // A purchase takes its category's glyph, like it takes its category's hue.
+    final icon = isPurchase && cat != null ? cat.icon : _typeIcon(tx.type);
 
-    final subtitleParts = <String>[
-      tx.account,
-      DateFormat('MMM d, yyyy').format(tx.date),
-      if (!isPurchase && tx.quantity != null && tx.price != null)
-        '${plainNumber(tx.quantity!)} @ ${plainNumber(tx.price!)}',
-    ];
+    final title = _title(cat);
 
     final card = isDark ? AppColors.darkCard : AppColors.surfaceCard;
     final textPrimary = isDark
@@ -211,10 +191,7 @@ class TransactionTile extends StatelessWidget {
       height: 1.2,
     );
     final labelStyle = metricsStyle.copyWith(
-      color: Color.alphaBlend(
-        textPrimary.withValues(alpha: _labelInkMix),
-        color,
-      ),
+      color: Color.alphaBlend(textPrimary.withValues(alpha: _labelInkMix), hue),
     );
 
     return LayoutBuilder(
@@ -235,11 +212,7 @@ class TransactionTile extends StatelessWidget {
 
         return DecoratedBox(
           decoration: BoxDecoration(
-            color: _wash(
-              color,
-              card,
-              isDark ? _bodyAlphaDark : _bodyAlphaLight,
-            ),
+            color: _wash(hue, card, isDark ? _bodyAlphaDark : _bodyAlphaLight),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Stack(
@@ -261,7 +234,7 @@ class TransactionTile extends StatelessWidget {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: _wash(
-                        color,
+                        hue,
                         card,
                         isDark ? _blockAlphaDark : _blockAlphaLight,
                       ),
@@ -285,24 +258,7 @@ class TransactionTile extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              switch (tx.type) {
-                                TransactionType.purchase =>
-                                  cat?.icon ?? Icons.shopping_bag_rounded,
-                                TransactionType.buy =>
-                                  Icons.trending_up_rounded,
-                                TransactionType.sell =>
-                                  Icons.trending_down_rounded,
-                                TransactionType.transfer =>
-                                  Icons.swap_horiz_rounded,
-                                TransactionType.deposit =>
-                                  Icons.arrow_downward_rounded,
-                                TransactionType.unknown =>
-                                  Icons.help_outline_rounded,
-                              },
-                              size: 20,
-                              color: color,
-                            ),
+                            Icon(icon, size: 20, color: hue),
                             const SizedBox(height: 4),
                             Text(
                               label.toUpperCase(),
@@ -338,7 +294,7 @@ class TransactionTile extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            subtitleParts.join(' · '),
+                            _subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -359,8 +315,7 @@ class TransactionTile extends StatelessWidget {
                     // it, so the description always keeps its share.
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
-                        maxWidth:
-                            MediaQuery.sizeOf(context).width * _amountMaxShare,
+                        maxWidth: cardWidth * _amountMaxShare,
                       ),
                       child: Text(
                         money(tx.computedAmount, currency),
@@ -383,11 +338,50 @@ class TransactionTile extends StatelessWidget {
       },
     );
   }
+
+  /// What the row leads with: the description, or the best stand-in the sheet
+  /// gives us when it is blank.
+  String _title(TransactionCategory? cat) => switch (tx.type) {
+    TransactionType.purchase =>
+      tx.description.isNotEmpty ? tx.description : (cat?.label ?? 'Purchase'),
+    // Transfer rows carry no ticker; show their note (the trade description).
+    TransactionType.transfer =>
+      tx.description.isNotEmpty ? tx.description : 'Transfer',
+    TransactionType.deposit =>
+      tx.description.isNotEmpty ? tx.description : 'Deposit',
+    TransactionType.unknown =>
+      tx.description.isNotEmpty
+          ? tx.description
+          : (tx.rawType ?? tx.type.label),
+    _ => tx.ticker ?? tx.type.label,
+  };
+
+  /// "BoA · Aug 24, 2026", plus quantity @ price on the rows that carry one.
+  String get _subtitle => [
+    tx.account,
+    DateFormat('MMM d, yyyy').format(tx.date),
+    if (tx.type != TransactionType.purchase &&
+        tx.quantity != null &&
+        tx.price != null)
+      '${plainNumber(tx.quantity!)} @ ${plainNumber(tx.price!)}',
+  ].join(' · ');
 }
 
 /// The five type colors, as light/dark pairs like the twelve category hues
 /// already are. The dark value is the lighter of each pair — a single constant
 /// left Buy and Deposit sitting almost unreadably dark on the navy card.
+/// The type glyphs, as the theme-independent counterpart to [_typeColor]. The
+/// purchase entry is only reached by an expense the sheet left uncategorized —
+/// a categorized one draws its category's icon.
+IconData _typeIcon(TransactionType t) => switch (t) {
+  TransactionType.purchase => Icons.shopping_bag_rounded,
+  TransactionType.buy => Icons.trending_up_rounded,
+  TransactionType.sell => Icons.trending_down_rounded,
+  TransactionType.transfer => Icons.swap_horiz_rounded,
+  TransactionType.deposit => Icons.arrow_downward_rounded,
+  TransactionType.unknown => Icons.help_outline_rounded,
+};
+
 Color _typeColor(TransactionType t, bool isDark) {
   switch (t) {
     case TransactionType.purchase:
